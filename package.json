@@ -1,0 +1,22 @@
+{
+  "name": "p95-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Magic Transit P95 Bandwidth Calculator — Cloudflare Worker with GraphQL analytics",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create p95-calc-db",
+    "db:init": "wrangler d1 execute p95-calc-db --local --file=schema.sql",
+    "db:init:remote": "wrangler d1 execute p95-calc-db --remote --file=schema.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260706.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.99.0"
+  }
+}

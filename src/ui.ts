@@ -1,0 +1,653 @@
+export function renderDashboard(userEmail: string): string {
+  return `<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic Transit P95 Bandwidth Calculator</title>
+  <link rel="icon" href="https://www.cloudflare.com/favicon.ico" type="image/x-icon">
+  <script>
+    var _origWarn = console.warn;
+    console.warn = function() {
+      if (arguments[0] && typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') >= 0) return;
+      return _origWarn.apply(console, arguments);
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            cf: { orange: '#F6821F', dark: '#0D1117', navy: '#1B2432', gray: '#8B949E', surface: '#161B22', border: '#30363D' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root, [data-theme="dark"] {
+      --page-bg: #0D1117; --surface: #161B22; --border: #30363D; --muted: #8B949E;
+      --text-primary: #E5E7EB; --text-strong: #FFFFFF; --input-bg: #0D1117;
+      --header-bg: rgba(22,27,34,0.85); --scrollbar: #30363D;
+    }
+    [data-theme="light"] {
+      --page-bg: #F9FAFB; --surface: #FFFFFF; --border: #E5E7EB; --muted: #6B7280;
+      --text-primary: #374151; --text-strong: #111827; --input-bg: #F3F4F6;
+      --header-bg: rgba(255,255,255,0.85); --scrollbar: #D1D5DB;
+    }
+    body { background: var(--page-bg); color: var(--text-primary); transition: background 0.2s, color 0.2s; }
+    * { scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; }
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    .spinner { border: 2px solid var(--border); border-top-color: #F6821F; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    [data-theme="light"] .text-white { color: var(--text-strong) !important; }
+    [data-theme="light"] .bg-cf-dark { background-color: var(--input-bg) !important; }
+    [data-theme="light"] .bg-cf-surface { background-color: var(--surface) !important; }
+    [data-theme="light"] .border-cf-border { border-color: var(--border) !important; }
+    [data-theme="light"] .text-cf-gray { color: var(--muted) !important; }
+    [data-theme="light"] select, [data-theme="light"] input { background-color: var(--input-bg); color: var(--text-primary); border-color: var(--border); }
+    [data-theme="light"] header { background: var(--header-bg) !important; }
+    .theme-toggle { display: flex; align-items: center; padding: 2px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); cursor: pointer; }
+    .theme-toggle-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; }
+    .theme-toggle-icon.active { background: #F6821F; color: #FFF; }
+    .theme-toggle-icon:not(.active) { color: var(--muted); }
+    .p95-highlight { background: linear-gradient(135deg, rgba(246,130,31,0.12), rgba(246,130,31,0.04)); border: 1px solid rgba(246,130,31,0.3); border-radius: 12px; }
+    .stat-card { text-align: center; padding: 1rem; }
+    .stat-value { font-size: 1.5rem; font-weight: 700; color: #F6821F; }
+    .stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.25rem; }
+    .filter-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-primary); }
+    .filter-chip.active { border-color: #F6821F; background: rgba(246,130,31,0.12); color: #F6821F; }
+    .filter-chip:hover { border-color: rgba(246,130,31,0.5); }
+    @media print {
+      header, .no-print { display: none !important; }
+      body { background: #fff; color: #000; }
+      .panel { border: 1px solid #ccc; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body class="font-sans min-h-screen">
+  <!-- Header -->
+  <header class="sticky top-0 z-40 backdrop-blur-md border-b border-cf-border" style="background:var(--header-bg)">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 64 64" fill="none"><path d="M44.048 43.904H19.2l-1.28-4.352L41.216 36l3.84 3.072-.512 3.84-.496.992z" fill="#F6821F"/><path d="M45.056 43.392l-.512-1.984c-.256-.768-.128-1.536.384-2.048.384-.512.96-.768 1.664-.768h.64l1.024.128c2.304.256 4.864.384 7.552.384h.512c.256 0 .384-.128.512-.256.128-.256.128-.512 0-.768-.896-2.944-3.712-5.056-6.912-5.184l-2.048-.128-.768-1.536c-2.432-5.184-7.68-8.512-13.504-8.512-6.656 0-12.416 4.48-14.08 10.88l-.512 2.048-2.048.256c-3.84.512-6.784 3.84-6.784 7.808 0 .384 0 .768.128 1.152 0 .256.256.384.512.384h34.112c.256 0 .512-.256.64-.512l.128-.384c.128-.384.128-.64.128-.896-.128-.768-.384-1.536-.768-1.984z" fill="#FBAD41"/></svg>
+        <div>
+          <h1 class="text-base font-semibold leading-tight" style="color:var(--text-strong)">Magic Transit P95 Bandwidth Calculator</h1>
+          <p class="text-[11px] text-cf-gray leading-tight mt-0.5">Query Magic Transit network analytics, visualize ingress/egress bandwidth, and calculate 95th percentile</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSettings()" class="text-xs text-cf-gray hover:text-cf-orange flex items-center gap-1 no-print" title="Settings">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <span id="user-email" class="text-xs text-cf-gray hidden sm:inline">${userEmail}</span>
+        <div class="theme-toggle no-print" onclick="toggleTheme()">
+          <span id="theme-sun" class="theme-toggle-icon"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/></svg></span>
+          <span id="theme-moon" class="theme-toggle-icon active"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-4">
+
+    <!-- Settings Panel (collapsible) -->
+    <div id="settings-panel" class="panel fade-in p-5 space-y-4 no-print hidden">
+      <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Settings</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Cloudflare Account Tag</label>
+          <input type="text" id="cfg-account-tag" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. 29335597">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-cf-gray mb-1">API Token <span class="text-[10px]">(Account Analytics: Read)</span></label>
+          <input type="password" id="cfg-api-token" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="Bearer token with analytics read permission">
+        </div>
+      </div>
+      <div class="flex gap-2 items-center">
+        <button onclick="saveSettings()" class="px-4 py-1.5 bg-cf-orange text-black text-xs font-semibold rounded-lg hover:opacity-90">Save Settings</button>
+        <button onclick="testToken()" class="px-4 py-1.5 border border-cf-border text-cf-gray text-xs font-semibold rounded-lg hover:border-cf-orange hover:text-cf-orange">Test Connection</button>
+        <span id="settings-status" class="text-xs text-cf-gray self-center"></span>
+      </div>
+    </div>
+
+    <!-- Filters Panel -->
+    <div class="panel fade-in p-5 space-y-4 no-print">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Query Filters</h2>
+        <button onclick="runQuery()" id="query-btn" class="px-5 py-2 bg-cf-orange text-black text-xs font-bold rounded-lg hover:opacity-90 flex items-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Run Query
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- Direction -->
+        <div>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Direction</label>
+          <div class="flex gap-1">
+            <span class="filter-chip active" data-dir="both" onclick="setDirection(this)">Both</span>
+            <span class="filter-chip" data-dir="ingress" onclick="setDirection(this)">Ingress</span>
+            <span class="filter-chip" data-dir="egress" onclick="setDirection(this)">Egress</span>
+          </div>
+        </div>
+
+        <!-- Source CIDR -->
+        <div>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Source CIDR</label>
+          <input type="text" id="filter-source-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white" placeholder="e.g. 10.0.0.0/8">
+        </div>
+
+        <!-- Destination CIDR -->
+        <div>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Destination CIDR</label>
+          <input type="text" id="filter-dest-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white" placeholder="e.g. 192.168.1.0/24">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- Time Range Presets -->
+        <div class="lg:col-span-2">
+          <label class="block text-xs font-medium text-cf-gray mb-1">Time Range</label>
+          <div class="flex flex-wrap gap-1">
+            <span class="filter-chip" data-range="1h" onclick="setTimeRange(this)">1h</span>
+            <span class="filter-chip" data-range="6h" onclick="setTimeRange(this)">6h</span>
+            <span class="filter-chip active" data-range="24h" onclick="setTimeRange(this)">24h</span>
+            <span class="filter-chip" data-range="48h" onclick="setTimeRange(this)">2d</span>
+            <span class="filter-chip" data-range="7d" onclick="setTimeRange(this)">7d</span>
+            <span class="filter-chip" data-range="14d" onclick="setTimeRange(this)">14d</span>
+            <span class="filter-chip" data-range="30d" onclick="setTimeRange(this)">30d</span>
+            <span class="filter-chip" data-range="custom" onclick="setTimeRange(this)">Custom</span>
+          </div>
+        </div>
+
+        <!-- Custom Date Pickers -->
+        <div id="custom-dates" class="lg:col-span-2 hidden">
+          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range</label>
+          <div class="flex gap-2">
+            <input type="datetime-local" id="custom-start" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
+            <span class="text-cf-gray self-center text-xs">to</span>
+            <input type="datetime-local" id="custom-end" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
+          </div>
+        </div>
+
+        <!-- Tunnel Filter -->
+        <div id="tunnel-filter-wrap" class="hidden">
+          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnel</label>
+          <select id="filter-tunnel" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white">
+            <option value="">All Tunnels</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div id="query-status" class="text-xs text-cf-gray hidden"></div>
+    </div>
+
+    <!-- P95 Summary Cards -->
+    <div id="p95-summary" class="hidden">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="p95-highlight stat-card fade-in">
+          <div class="stat-value" id="p95-ingress">—</div>
+          <div class="stat-label">P95 Ingress</div>
+        </div>
+        <div class="p95-highlight stat-card fade-in">
+          <div class="stat-value" id="p95-egress">—</div>
+          <div class="stat-label">P95 Egress</div>
+        </div>
+        <div class="panel stat-card fade-in">
+          <div class="stat-value" id="peak-ingress" style="color:var(--text-strong);font-size:1.1rem">—</div>
+          <div class="stat-label">Peak Ingress</div>
+        </div>
+        <div class="panel stat-card fade-in">
+          <div class="stat-value" id="peak-egress" style="color:var(--text-strong);font-size:1.1rem">—</div>
+          <div class="stat-label">Peak Egress</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+        <div class="panel stat-card fade-in">
+          <div class="stat-value" id="avg-ingress" style="color:var(--text-strong);font-size:1.1rem">—</div>
+          <div class="stat-label">Avg Ingress</div>
+        </div>
+        <div class="panel stat-card fade-in">
+          <div class="stat-value" id="avg-egress" style="color:var(--text-strong);font-size:1.1rem">—</div>
+          <div class="stat-label">Avg Egress</div>
+        </div>
+        <div class="panel stat-card fade-in">
+          <div class="stat-value" id="data-points" style="color:var(--text-strong);font-size:1.1rem">—</div>
+          <div class="stat-label">Data Points</div>
+        </div>
+        <div class="panel stat-card fade-in">
+          <div class="stat-value" id="query-interval" style="color:var(--text-strong);font-size:1.1rem">—</div>
+          <div class="stat-label">Interval</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts: 4-panel layout -->
+    <div id="charts-section" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Ingress Time Series -->
+        <div class="panel p-4 fade-in">
+          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate <span class="text-cf-gray font-normal" id="ingress-interval-label">(avg over 5min window)</span></h3>
+          <div style="height:280px"><canvas id="chart-ingress-ts"></canvas></div>
+        </div>
+        <!-- Ingress Percentile -->
+        <div class="panel p-4 fade-in">
+          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="ingress-pct-label">(avg over 5min window)</span></h3>
+          <div style="height:280px"><canvas id="chart-ingress-pct"></canvas></div>
+        </div>
+        <!-- Egress Time Series -->
+        <div class="panel p-4 fade-in">
+          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate <span class="text-cf-gray font-normal" id="egress-interval-label">(avg over 5min window)</span></h3>
+          <div style="height:280px"><canvas id="chart-egress-ts"></canvas></div>
+        </div>
+        <!-- Egress Percentile -->
+        <div class="panel p-4 fade-in">
+          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="egress-pct-label">(avg over 5min window)</span></h3>
+          <div style="height:280px"><canvas id="chart-egress-pct"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Table (collapsible) -->
+    <div id="data-table-section" class="hidden">
+      <div class="panel p-4 fade-in">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-semibold" style="color:var(--text-strong)">Raw Data</h3>
+          <button onclick="toggleDataTable()" class="text-[11px] text-cf-gray hover:text-cf-orange">Show/Hide</button>
+        </div>
+        <div id="data-table-body" class="hidden overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="text-left text-cf-gray border-b border-cf-border">
+                <th class="pb-2 pr-4">Time</th>
+                <th class="pb-2 pr-4">Direction</th>
+                <th class="pb-2 pr-4">Bit Rate</th>
+                <th class="pb-2 pr-4">Bits</th>
+                <th class="pb-2">Packets</th>
+              </tr>
+            </thead>
+            <tbody id="data-table-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="text-center text-xs text-cf-gray py-6 mt-8 border-t border-cf-border">
+    <svg class="mx-auto mb-1 w-24 h-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="#FFF" d="m115.679 69.288l-15.591-8.94l-2.689-1.163l-63.781.436v32.381h82.061z"/><path fill="#F38020" d="M87.295 89.022c.763-2.617.472-5.015-.8-6.796c-1.163-1.635-3.125-2.58-5.488-2.689l-44.737-.581c-.291 0-.545-.145-.691-.363s-.182-.509-.109-.8c.145-.436.581-.763 1.054-.8l45.137-.581c5.342-.254 11.157-4.579 13.192-9.885l2.58-6.723c.109-.291.145-.581.073-.872c-2.906-13.158-14.644-22.97-28.672-22.97c-12.938 0-23.913 8.359-27.838 19.952a13.35 13.35 0 0 0-9.267-2.58c-6.215.618-11.193 5.597-11.811 11.811c-.145 1.599-.036 3.162.327 4.615C10.104 70.051 2 78.337 2 88.549c0 .909.073 1.817.182 2.726a.895.895 0 0 0 .872.763h82.57c.472 0 .909-.327 1.054-.8z"/><path fill="#FAAE40" d="M101.542 60.275c-.4 0-.836 0-1.236.036c-.291 0-.545.218-.654.509l-1.744 6.069c-.763 2.617-.472 5.015.8 6.796c1.163 1.635 3.125 2.58 5.488 2.689l9.522.581c.291 0 .545.145.691.363s.182.545.109.8c-.145.436-.581.763-1.054.8l-9.924.582c-5.379.254-11.157 4.579-13.192 9.885l-.727 1.853c-.145.363.109.727.509.727h34.089c.4 0 .763-.254.872-.654c.581-2.108.909-4.325.909-6.614c0-13.447-10.975-24.422-24.458-24.422"/></svg>
+    Cloudflare Internal Tool
+  </footer>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+var selectedDirection = 'both';
+var selectedRange = '24h';
+var charts = { ingressTs: null, ingressPct: null, egressTs: null, egressPct: null };
+var lastResult = null;
+
+// ============================================================
+// THEME
+// ============================================================
+function applyTheme(theme) { document.documentElement.setAttribute('data-theme', theme); updateChartTheme(); }
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme') || 'dark';
+  var next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  localStorage.setItem('p95-theme', next);
+}
+(function() { var saved = localStorage.getItem('p95-theme'); if (saved) applyTheme(saved); })();
+
+function getChartTextColor() { return document.documentElement.getAttribute('data-theme') === 'light' ? '#374151' : '#9CA3AF'; }
+function getChartGridColor() { return document.documentElement.getAttribute('data-theme') === 'light' ? '#E5E7EB' : '#1F2937'; }
+function updateChartTheme() {
+  Object.values(charts).forEach(function(ch) {
+    if (!ch) return;
+    ch.options.plugins.legend.labels.color = getChartTextColor();
+    if (ch.options.scales.x) ch.options.scales.x.ticks.color = getChartTextColor();
+    if (ch.options.scales.y) {
+      ch.options.scales.y.ticks.color = getChartTextColor();
+      ch.options.scales.y.grid.color = getChartGridColor();
+    }
+    ch.update('none');
+  });
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function toggleSettings() {
+  var panel = document.getElementById('settings-panel');
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) loadSettings();
+}
+async function loadSettings() {
+  try {
+    var resp = await fetch('/api/settings');
+    var data = await resp.json();
+    document.getElementById('cfg-account-tag').value = data.account_tag || '';
+    if (data.has_token) document.getElementById('cfg-api-token').value = '••••••••';
+  } catch(e) {}
+}
+async function saveSettings() {
+  var status = document.getElementById('settings-status');
+  status.textContent = 'Saving...';
+  try {
+    var resp = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        account_tag: document.getElementById('cfg-account-tag').value,
+        api_token: document.getElementById('cfg-api-token').value,
+      }),
+    });
+    var data = await resp.json();
+    status.textContent = data.ok ? 'Saved!' : 'Error saving';
+    if (data.ok) {
+      setTimeout(function() { document.getElementById('settings-panel').classList.add('hidden'); status.textContent = ''; }, 1000);
+    } else {
+      setTimeout(function() { status.textContent = ''; }, 2000);
+    }
+  } catch(e) { status.textContent = 'Error: ' + e.message; }
+}
+async function testToken() {
+  var status = document.getElementById('settings-status');
+  status.textContent = 'Testing...';
+  status.style.color = 'var(--text-muted)';
+  try {
+    var resp = await fetch('/api/test-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        account_tag: document.getElementById('cfg-account-tag').value,
+        api_token: document.getElementById('cfg-api-token').value,
+      }),
+    });
+    var data = await resp.json();
+    if (data.ok) {
+      status.style.color = '#10B981';
+      var msg = data.message;
+      if (data.tunnelNames && data.tunnelNames.length > 0) {
+        msg += ' Tunnels: ' + data.tunnelNames.join(', ');
+      }
+      status.textContent = msg;
+    } else {
+      status.style.color = '#EF4444';
+      status.textContent = data.error;
+    }
+    setTimeout(function() { status.textContent = ''; status.style.color = ''; }, 8000);
+  } catch(e) {
+    status.style.color = '#EF4444';
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+// Load settings and user info on page load
+(function(){
+  loadSettings();
+  fetch('/api/me').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.email) document.getElementById('user-email').textContent = d.email;
+  }).catch(function(){});
+})();
+
+// ============================================================
+// FILTERS
+// ============================================================
+function setDirection(el) {
+  document.querySelectorAll('[data-dir]').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  selectedDirection = el.getAttribute('data-dir');
+}
+function setTimeRange(el) {
+  document.querySelectorAll('[data-range]').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  selectedRange = el.getAttribute('data-range');
+  document.getElementById('custom-dates').classList.toggle('hidden', selectedRange !== 'custom');
+}
+
+function getTimeRange() {
+  if (selectedRange === 'custom') {
+    var s = document.getElementById('custom-start').value;
+    var e = document.getElementById('custom-end').value;
+    if (!s || !e) return null;
+    return { start: new Date(s).toISOString(), end: new Date(e).toISOString() };
+  }
+  var now = new Date();
+  var ms = { '1h': 3600000, '6h': 21600000, '24h': 86400000, '48h': 172800000, '7d': 604800000, '14d': 1209600000, '30d': 2592000000 };
+  var offset = ms[selectedRange] || 86400000;
+  return { start: new Date(now.getTime() - offset).toISOString(), end: now.toISOString() };
+}
+
+// ============================================================
+// QUERY
+// ============================================================
+async function runQuery() {
+  var btn = document.getElementById('query-btn');
+  var statusEl = document.getElementById('query-status');
+  var range = getTimeRange();
+  if (!range) { statusEl.textContent = 'Please select a valid time range.'; statusEl.classList.remove('hidden'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Querying...';
+  statusEl.textContent = 'Fetching data from Cloudflare GraphQL API...';
+  statusEl.classList.remove('hidden');
+
+  try {
+    var body = {
+      start: range.start,
+      end: range.end,
+      direction: selectedDirection,
+      sourceCidr: document.getElementById('filter-source-cidr').value || undefined,
+      destCidr: document.getElementById('filter-dest-cidr').value || undefined,
+      tunnelName: document.getElementById('filter-tunnel').value || undefined,
+    };
+
+    var resp = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    var data = await resp.json();
+
+    if (data.error) {
+      statusEl.textContent = 'Error: ' + data.error;
+      statusEl.style.color = '#ef4444';
+      return;
+    }
+
+    lastResult = data;
+    statusEl.classList.add('hidden');
+    statusEl.style.color = '';
+    renderResults(data);
+  } catch(e) {
+    statusEl.textContent = 'Request failed: ' + e.message;
+    statusEl.style.color = '#ef4444';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Run Query';
+  }
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function formatBps(bps) {
+  if (bps >= 1e9) return (bps / 1e9).toFixed(2) + ' Gb/s';
+  if (bps >= 1e6) return (bps / 1e6).toFixed(2) + ' Mb/s';
+  if (bps >= 1e3) return (bps / 1e3).toFixed(2) + ' Kb/s';
+  return bps.toFixed(0) + ' b/s';
+}
+function formatTime(iso) {
+  var d = new Date(iso);
+  return (d.getMonth()+1).toString().padStart(2,'0') + '/' + d.getDate().toString().padStart(2,'0') + ' ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+
+function renderResults(data) {
+  // P95 summary
+  document.getElementById('p95-summary').classList.remove('hidden');
+  document.getElementById('p95-ingress').textContent = formatBps(data.ingress.p95);
+  document.getElementById('p95-egress').textContent = formatBps(data.egress.p95);
+  document.getElementById('peak-ingress').textContent = formatBps(data.ingress.peakBps);
+  document.getElementById('peak-egress').textContent = formatBps(data.egress.peakBps);
+  document.getElementById('avg-ingress').textContent = formatBps(data.ingress.avgBps);
+  document.getElementById('avg-egress').textContent = formatBps(data.egress.avgBps);
+  document.getElementById('data-points').textContent = data.ingress.series.length + ' / ' + data.egress.series.length;
+  document.getElementById('query-interval').textContent = data.interval + (data.chunks > 1 ? ' (' + data.chunks + ' chunks)' : '');
+
+  // Update interval labels
+  var intervalLabel = '(avg over ' + data.interval + ' window)';
+  document.getElementById('ingress-interval-label').textContent = intervalLabel;
+  document.getElementById('ingress-pct-label').textContent = intervalLabel;
+  document.getElementById('egress-interval-label').textContent = intervalLabel;
+  document.getElementById('egress-pct-label').textContent = intervalLabel;
+
+  // Tunnel filter
+  if (data.tunnels && data.tunnels.length > 0) {
+    var sel = document.getElementById('filter-tunnel');
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All Tunnels</option>' + data.tunnels.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+    if (current) sel.value = current;
+    document.getElementById('tunnel-filter-wrap').classList.remove('hidden');
+  }
+
+  // Charts
+  document.getElementById('charts-section').classList.remove('hidden');
+  renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate');
+  renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate');
+  renderPercentileChart('chart-ingress-pct', 'ingressPct', data.ingress.percentiles, data.ingress.p95, '#22c55e');
+  renderPercentileChart('chart-egress-pct', 'egressPct', data.egress.percentiles, data.egress.p95, '#3b82f6');
+
+  // Data table
+  document.getElementById('data-table-section').classList.remove('hidden');
+  renderDataTable(data);
+}
+
+function renderTimeSeriesChart(canvasId, chartKey, series, color, label) {
+  var ctx = document.getElementById(canvasId).getContext('2d');
+  if (charts[chartKey]) charts[chartKey].destroy();
+
+  var labels = series.map(function(p) { return formatTime(p.time); });
+  var values = series.map(function(p) { return p.bitRate; });
+
+  charts[chartKey] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: label,
+        data: values,
+        borderColor: color,
+        backgroundColor: color + '18',
+        fill: true,
+        tension: 0.2,
+        pointRadius: 0,
+        borderWidth: 1.5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: getChartTextColor(), font: { size: 10 }, usePointStyle: true, pointStyle: 'line', boxWidth: 20 } },
+        tooltip: {
+          callbacks: {
+            title: function(items) { return items[0].label; },
+            label: function(ctx) { return ctx.dataset.label + ': ' + formatBps(ctx.parsed.y); }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: getChartTextColor(), font: { size: 9 }, maxRotation: 45, maxTicksLimit: 20 }, grid: { display: false } },
+        y: {
+          ticks: { color: getChartTextColor(), font: { size: 10 }, callback: function(v) { return formatBps(v); } },
+          grid: { color: getChartGridColor() }
+        }
+      }
+    }
+  });
+}
+
+function renderPercentileChart(canvasId, chartKey, percentiles, p95Value, color) {
+  var ctx = document.getElementById(canvasId).getContext('2d');
+  if (charts[chartKey]) charts[chartKey].destroy();
+
+  var labels = percentiles.map(function(p) { return p.percentile + '%'; });
+  var values = percentiles.map(function(p) { return p.value; });
+  var bgColors = percentiles.map(function(p) { return p.percentile === 95 ? '#F6821F' : color + 'AA'; });
+
+  charts[chartKey] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'bit rate',
+        data: values,
+        backgroundColor: bgColors,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: getChartTextColor(), font: { size: 10 } } },
+        tooltip: { callbacks: { label: function(ctx) { return formatBps(ctx.parsed.y); } } }
+      },
+      scales: {
+        x: { ticks: { color: getChartTextColor(), font: { size: 9 } }, grid: { display: false } },
+        y: {
+          ticks: { color: getChartTextColor(), font: { size: 10 }, callback: function(v) { return formatBps(v); } },
+          grid: { color: getChartGridColor() }
+        }
+      }
+    }
+  });
+}
+
+function renderDataTable(data) {
+  var rows = [];
+  data.ingress.series.forEach(function(p) {
+    rows.push({ time: p.time, dir: 'ingress', bitRate: p.bitRate, bits: p.bits, packets: p.packets });
+  });
+  data.egress.series.forEach(function(p) {
+    rows.push({ time: p.time, dir: 'egress', bitRate: p.bitRate, bits: p.bits, packets: p.packets });
+  });
+  rows.sort(function(a, b) { return a.time.localeCompare(b.time); });
+
+  var tbody = document.getElementById('data-table-rows');
+  tbody.innerHTML = rows.slice(0, 500).map(function(r) {
+    var dirColor = r.dir === 'ingress' ? '#22c55e' : '#3b82f6';
+    return '<tr class="border-b border-cf-border">' +
+      '<td class="py-1.5 pr-4" style="color:var(--text-primary)">' + formatTime(r.time) + '</td>' +
+      '<td class="py-1.5 pr-4"><span style="color:' + dirColor + '">' + r.dir + '</span></td>' +
+      '<td class="py-1.5 pr-4">' + formatBps(r.bitRate) + '</td>' +
+      '<td class="py-1.5 pr-4">' + r.bits.toLocaleString() + '</td>' +
+      '<td class="py-1.5">' + r.packets.toLocaleString() + '</td>' +
+      '</tr>';
+  }).join('');
+
+  if (rows.length > 500) {
+    tbody.innerHTML += '<tr><td colspan="5" class="py-2 text-cf-gray text-center">Showing 500 of ' + rows.length + ' rows</td></tr>';
+  }
+}
+
+function toggleDataTable() {
+  document.getElementById('data-table-body').classList.toggle('hidden');
+}
+</script>
+</body>
+</html>`;
+}

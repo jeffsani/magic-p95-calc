@@ -1,0 +1,28 @@
+name = "p95-calculator"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "p95.cfdemo.me/*", zone_name = "cfdemo.me" }
+]
+
+[vars]
+ENVIRONMENT = "production"
+CF_ACCESS_TEAM_DOMAIN = "cloudflare"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "p95-calc-db"
+database_id = "005997f4-7edb-4c8f-975a-13117176e9b6"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
