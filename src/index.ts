@@ -80,15 +80,15 @@ app.post('/api/test-token', async (c) => {
   if (!accountTag) return c.json({ ok: false, error: 'Account ID is required.' }, 400);
   if (!apiToken) return c.json({ ok: false, error: 'API token is required.' }, 400);
 
-  // Run a minimal GraphQL query to verify token + permissions
+  // Query last 24h to discover all unique tunnel names
   const query = `query TestToken($accountTag: string!) {
     viewer {
       accounts(filter: { accountTag: $accountTag }) {
         magicTransitTunnelTrafficAdaptiveGroups(
-          limit: 1
-          filter: { datetime_geq: "${new Date(Date.now() - 3_600_000).toISOString()}", datetime_lt: "${new Date().toISOString()}" }
+          limit: 10000
+          filter: { datetime_geq: "${new Date(Date.now() - 86_400_000).toISOString()}", datetime_lt: "${new Date().toISOString()}" }
         ) {
-          dimensions { datetimeFiveMinutes tunnelName }
+          dimensions { tunnelName }
         }
       }
     }
@@ -123,11 +123,12 @@ app.post('/api/test-token', async (c) => {
       return c.json({ ok: false, error: `No data for account ${accountTag} — check the Account ID and that the token has access to this account.` });
     }
 
-    const tunnels = accounts[0]?.magicTransitTunnelTrafficAdaptiveGroups || [];
+    const rows = accounts[0]?.magicTransitTunnelTrafficAdaptiveGroups || [];
+    const tunnelNames = [...new Set(rows.map((t: any) => t.dimensions?.tunnelName).filter(Boolean))].sort() as string[];
     return c.json({
       ok: true,
-      message: `Token is valid. Found ${tunnels.length} tunnel traffic data point(s) in the last hour.`,
-      tunnelNames: tunnels.map((t: any) => t.dimensions?.tunnelName).filter(Boolean),
+      message: `Token is valid. Found ${tunnelNames.length} tunnel(s) in the last 24 hours.`,
+      tunnelNames,
     });
   } catch (err: any) {
     return c.json({ ok: false, error: `Network error: ${err.message}` }, 502);

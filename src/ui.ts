@@ -105,7 +105,7 @@ export function renderDashboard(userEmail: string): string {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-medium text-cf-gray mb-1">Cloudflare Account Tag</label>
-          <input type="text" id="cfg-account-tag" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. 29335597">
+          <input type="text" id="cfg-account-tag" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. 7a0c39354edd897a1a98f6c7e50c6873">
         </div>
         <div>
           <label class="block text-xs font-medium text-cf-gray mb-1">API Token <span class="text-[10px]">(Account Analytics: Read)</span></label>
@@ -179,9 +179,9 @@ export function renderDashboard(userEmail: string): string {
           </div>
         </div>
 
-        <!-- Tunnel Filter -->
-        <div id="tunnel-filter-wrap" class="hidden">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnel</label>
+        <!-- Tunnel / Interconnect Filter -->
+        <div id="tunnel-filter-wrap">
+          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnel / Interconnect</label>
           <select id="filter-tunnel" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white">
             <option value="">All Tunnels</option>
           </select>
@@ -379,11 +379,10 @@ async function testToken() {
     var data = await resp.json();
     if (data.ok) {
       status.style.color = '#10B981';
-      var msg = data.message;
+      status.textContent = data.message;
       if (data.tunnelNames && data.tunnelNames.length > 0) {
-        msg += ' Tunnels: ' + data.tunnelNames.join(', ');
+        populateTunnelFilter(data.tunnelNames);
       }
-      status.textContent = msg;
     } else {
       status.style.color = '#EF4444';
       status.textContent = data.error;
@@ -394,11 +393,19 @@ async function testToken() {
     status.textContent = 'Error: ' + e.message;
   }
 }
-// Load settings and user info on page load
+// Load settings, user info, and tunnel list on page load
 (function(){
   loadSettings();
   fetch('/api/me').then(function(r) { return r.json(); }).then(function(d) {
     if (d.email) document.getElementById('user-email').textContent = d.email;
+  }).catch(function(){});
+  // Auto-discover tunnels using saved settings
+  fetch('/api/test-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account_tag: '', api_token: '' }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
   }).catch(function(){});
 })();
 
@@ -428,6 +435,13 @@ function getTimeRange() {
   var ms = { '1h': 3600000, '6h': 21600000, '24h': 86400000, '48h': 172800000, '7d': 604800000, '14d': 1209600000, '30d': 2592000000 };
   var offset = ms[selectedRange] || 86400000;
   return { start: new Date(now.getTime() - offset).toISOString(), end: now.toISOString() };
+}
+
+function populateTunnelFilter(tunnelNames) {
+  var sel = document.getElementById('filter-tunnel');
+  var current = sel.value;
+  sel.innerHTML = '<option value="">All Tunnels</option>' + tunnelNames.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  if (current) sel.value = current;
 }
 
 // ============================================================
@@ -515,11 +529,7 @@ function renderResults(data) {
 
   // Tunnel filter
   if (data.tunnels && data.tunnels.length > 0) {
-    var sel = document.getElementById('filter-tunnel');
-    var current = sel.value;
-    sel.innerHTML = '<option value="">All Tunnels</option>' + data.tunnels.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
-    if (current) sel.value = current;
-    document.getElementById('tunnel-filter-wrap').classList.remove('hidden');
+    populateTunnelFilter(data.tunnels);
   }
 
   // Charts
