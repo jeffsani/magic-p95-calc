@@ -117,14 +117,8 @@ async function executeChunkQuery(params: {
   useNetworkAnalytics: boolean;
 }): Promise<{ points: TimeSeriesPoint[]; tunnels: string[]; error?: string }> {
   const query = params.useNetworkAnalytics
-    ? buildNetworkAnalyticsChunkQuery(params.direction, params.sourceCidr, params.destCidr)
-    : buildTunnelTrafficChunkQuery(params.direction);
-
-  const variables: Record<string, string> = {
-    accountTag: params.accountTag,
-    start: params.start,
-    end: params.end,
-  };
+    ? buildNetworkAnalyticsChunkQuery(params.accountTag, params.direction, params.start, params.end, params.sourceCidr, params.destCidr)
+    : buildTunnelTrafficChunkQuery(params.accountTag, params.direction, params.start, params.end);
 
   const resp = await fetch(CF_GRAPHQL, {
     method: 'POST',
@@ -132,7 +126,7 @@ async function executeChunkQuery(params: {
       'Authorization': `Bearer ${params.apiToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query }),
   });
 
   if (!resp.ok) {
@@ -173,35 +167,36 @@ async function executeChunkQuery(params: {
  * Per the CNI P95 guide: always use datetimeFiveMinutes / bitRateFiveMinutes
  * with limit 10000 and weekly chunks.
  */
-function buildTunnelTrafficChunkQuery(direction: 'ingress' | 'egress'): string {
-  return `
-    query TunnelTraffic($accountTag: string!, $start: Time!, $end: Time!) {
-      viewer {
-        accounts(filter: { accountTag: $accountTag }) {
-          traffic: magicTransitTunnelTrafficAdaptiveGroups(
-            limit: 10000
-            filter: {
-              datetime_geq: $start
-              datetime_lt: $end
-              direction: "${direction}"
-            }
-            orderBy: [datetimeFiveMinutes_ASC]
-          ) {
-            avg { bitRateFiveMinutes }
-            sum { bits packets }
-            dimensions { datetimeFiveMinutes tunnelName }
+function buildTunnelTrafficChunkQuery(accountTag: string, direction: 'ingress' | 'egress', start: string, end: string): string {
+  return `{
+    viewer {
+      accounts(filter: { accountTag: "${accountTag}" }) {
+        traffic: magicTransitTunnelTrafficAdaptiveGroups(
+          limit: 10000
+          filter: {
+            datetime_geq: "${start}"
+            datetime_lt: "${end}"
+            direction: "${direction}"
           }
+          orderBy: [datetimeFiveMinutes_ASC]
+        ) {
+          avg { bitRateFiveMinutes }
+          sum { bits packets }
+          dimensions { datetimeFiveMinutes tunnelName }
         }
       }
     }
-  `;
+  }`;
 }
 
 /**
  * Build a single-direction network analytics query with CIDR filters.
  */
 function buildNetworkAnalyticsChunkQuery(
+  accountTag: string,
   direction: 'ingress' | 'egress',
+  start: string,
+  end: string,
   sourceCidr?: string,
   destCidr?: string,
 ): string {
@@ -210,27 +205,25 @@ function buildNetworkAnalyticsChunkQuery(
   if (destCidr) extraFilters.push(`destinationIp: "${destCidr}"`);
   const extraStr = extraFilters.length ? ', ' + extraFilters.join(', ') : '';
 
-  return `
-    query NetworkTraffic($accountTag: string!, $start: Time!, $end: Time!) {
-      viewer {
-        accounts(filter: { accountTag: $accountTag }) {
-          traffic: magicTransitNetworkAnalyticsAdaptiveGroups(
-            limit: 10000
-            filter: {
-              datetime_geq: $start
-              datetime_lt: $end
-              direction: "${direction}"${extraStr}
-            }
-            orderBy: [datetimeFiveMinutes_ASC]
-          ) {
-            avg { bitRateFiveMinutes }
-            sum { bits packets }
-            dimensions { datetimeFiveMinutes }
+  return `{
+    viewer {
+      accounts(filter: { accountTag: "${accountTag}" }) {
+        traffic: magicTransitNetworkAnalyticsAdaptiveGroups(
+          limit: 10000
+          filter: {
+            datetime_geq: "${start}"
+            datetime_lt: "${end}"
+            direction: "${direction}"${extraStr}
           }
+          orderBy: [datetimeFiveMinutes_ASC]
+        ) {
+          avg { bitRateFiveMinutes }
+          sum { bits packets }
+          dimensions { datetimeFiveMinutes }
         }
       }
     }
-  `;
+  }`;
 }
 
 /**

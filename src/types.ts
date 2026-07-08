@@ -17,7 +17,6 @@ export interface BandwidthQuery {
   direction?: 'ingress' | 'egress' | 'both';
   sourceCidr?: string;
   destCidr?: string;
-  tunnelName?: string;
 }
 
 export interface TimeSeriesPoint {

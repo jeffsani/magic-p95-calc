@@ -144,7 +144,7 @@ app.post('/api/query', async (c) => {
     direction?: 'ingress' | 'egress' | 'both';
     sourceCidr?: string;
     destCidr?: string;
-    tunnelName?: string;
+    tunnelNames?: string[];
     accountTag?: string;
   }>();
 
@@ -173,7 +173,6 @@ app.post('/api/query', async (c) => {
     direction,
     sourceCidr: body.sourceCidr,
     destCidr: body.destCidr,
-    tunnelName: body.tunnelName,
   };
 
   const raw = await queryBandwidth(queryParams);
@@ -182,35 +181,36 @@ app.post('/api/query', async (c) => {
     return c.json({ error: raw.error }, 502);
   }
 
-  // Aggregate across tunnels for the main charts
-  const ingressAgg = aggregateByTime(raw.ingress);
-  const egressAgg = aggregateByTime(raw.egress);
-
-  // Filter by tunnel name if requested
+  // Per the CNI P95 guide:
+  //   1. Filter to selected tunnels
+  //   2. Sum bitRate across selected tunnels per 5-min interval
+  //   3. Compute P95 on the aggregated (summed) values
   let ingressFiltered = raw.ingress;
   let egressFiltered = raw.egress;
-  if (body.tunnelName) {
-    ingressFiltered = raw.ingress.filter(p => p.tunnel === body.tunnelName);
-    egressFiltered = raw.egress.filter(p => p.tunnel === body.tunnelName);
+  if (body.tunnelNames && body.tunnelNames.length > 0) {
+    const tunnelSet = new Set(body.tunnelNames);
+    ingressFiltered = raw.ingress.filter(p => p.tunnel && tunnelSet.has(p.tunnel));
+    egressFiltered = raw.egress.filter(p => p.tunnel && tunnelSet.has(p.tunnel));
   }
 
-  const ingressForCalc = body.tunnelName ? aggregateByTime(ingressFiltered) : ingressAgg;
-  const egressForCalc = body.tunnelName ? aggregateByTime(egressFiltered) : egressAgg;
+  // Aggregate: sum across tunnels per time interval
+  const ingressAgg = aggregateByTime(ingressFiltered);
+  const egressAgg = aggregateByTime(egressFiltered);
 
-  // Calculate P95
-  const ingressP95 = calculateP95(ingressForCalc);
-  const egressP95 = calculateP95(egressForCalc);
+  // Calculate P95 on the aggregated sums
+  const ingressP95 = calculateP95(ingressAgg);
+  const egressP95 = calculateP95(egressAgg);
 
   const result: BandwidthResult = {
     ingress: {
-      series: ingressForCalc,
+      series: ingressAgg,
       p95: ingressP95.p95,
       percentiles: ingressP95.percentiles,
       peakBps: ingressP95.peak,
       avgBps: ingressP95.avg,
     },
     egress: {
-      series: egressForCalc,
+      series: egressAgg,
       p95: egressP95.p95,
       percentiles: egressP95.percentiles,
       peakBps: egressP95.peak,
@@ -226,7 +226,7 @@ app.post('/api/query', async (c) => {
       filters: {
         ...(body.sourceCidr ? { sourceCidr: body.sourceCidr } : {}),
         ...(body.destCidr ? { destCidr: body.destCidr } : {}),
-        ...(body.tunnelName ? { tunnelName: body.tunnelName } : {}),
+        ...(body.tunnelNames ? { tunnelNames: body.tunnelNames.join(', ') } : {}),
       },
     },
   };

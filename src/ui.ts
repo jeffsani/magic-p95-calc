@@ -140,16 +140,30 @@ export function renderDashboard(userEmail: string): string {
           </div>
         </div>
 
-        <!-- Source CIDR -->
+        <!-- Source / Destination CIDR -->
         <div>
           <label class="block text-xs font-medium text-cf-gray mb-1">Source CIDR</label>
-          <input type="text" id="filter-source-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white" placeholder="e.g. 10.0.0.0/8">
-        </div>
-
-        <!-- Destination CIDR -->
-        <div>
+          <input type="text" id="filter-source-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white mb-2" placeholder="e.g. 10.0.0.0/8">
           <label class="block text-xs font-medium text-cf-gray mb-1">Destination CIDR</label>
           <input type="text" id="filter-dest-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white" placeholder="e.g. 192.168.1.0/24">
+        </div>
+
+        <!-- Tunnel / Interconnect Multi-Select -->
+        <div id="tunnel-filter-wrap">
+          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnels / Interconnects</label>
+          <div class="relative">
+            <button type="button" id="tunnel-select-btn" onclick="toggleTunnelDropdown()" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white text-left flex justify-between items-center">
+              <span id="tunnel-select-label">All Tunnels</span>
+              <svg class="w-3 h-3 text-cf-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div id="tunnel-dropdown" class="hidden absolute z-50 mt-1 w-full bg-cf-dark border border-cf-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              <label class="flex items-center gap-2 px-3 py-2 hover:bg-cf-border cursor-pointer text-sm text-white border-b border-cf-border">
+                <input type="checkbox" id="tunnel-select-all" checked onchange="toggleAllTunnels(this.checked)" class="accent-orange-500">
+                <span class="font-medium">Select All</span>
+              </label>
+              <div id="tunnel-options"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -179,13 +193,6 @@ export function renderDashboard(userEmail: string): string {
           </div>
         </div>
 
-        <!-- Tunnel / Interconnect Filter -->
-        <div id="tunnel-filter-wrap">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnel / Interconnect</label>
-          <select id="filter-tunnel" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white">
-            <option value="">All Tunnels</option>
-          </select>
-        </div>
       </div>
 
       <!-- Status -->
@@ -437,12 +444,44 @@ function getTimeRange() {
   return { start: new Date(now.getTime() - offset).toISOString(), end: now.toISOString() };
 }
 
+var allTunnelNames = [];
 function populateTunnelFilter(tunnelNames) {
-  var sel = document.getElementById('filter-tunnel');
-  var current = sel.value;
-  sel.innerHTML = '<option value="">All Tunnels</option>' + tunnelNames.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
-  if (current) sel.value = current;
+  allTunnelNames = tunnelNames;
+  var container = document.getElementById('tunnel-options');
+  container.innerHTML = tunnelNames.map(function(t) {
+    return '<label class="flex items-center gap-2 px-3 py-1.5 hover:bg-cf-border cursor-pointer text-sm text-white">' +
+      '<input type="checkbox" checked class="tunnel-cb accent-orange-500" value="' + t + '" onchange="updateTunnelLabel()">' + t + '</label>';
+  }).join('');
+  document.getElementById('tunnel-select-all').checked = true;
+  updateTunnelLabel();
 }
+function toggleTunnelDropdown() {
+  document.getElementById('tunnel-dropdown').classList.toggle('hidden');
+}
+function toggleAllTunnels(checked) {
+  document.querySelectorAll('.tunnel-cb').forEach(function(cb) { cb.checked = checked; });
+  updateTunnelLabel();
+}
+function getSelectedTunnels() {
+  var cbs = document.querySelectorAll('.tunnel-cb');
+  if (cbs.length === 0) return [];
+  var selected = [];
+  cbs.forEach(function(cb) { if (cb.checked) selected.push(cb.value); });
+  return selected;
+}
+function updateTunnelLabel() {
+  var selected = getSelectedTunnels();
+  var label = document.getElementById('tunnel-select-label');
+  var allCb = document.getElementById('tunnel-select-all');
+  if (selected.length === 0) { label.textContent = 'None selected'; allCb.checked = false; }
+  else if (selected.length === allTunnelNames.length) { label.textContent = 'All Tunnels (' + selected.length + ')'; allCb.checked = true; }
+  else { label.textContent = selected.length + ' of ' + allTunnelNames.length + ' selected'; allCb.checked = false; }
+}
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('tunnel-filter-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('tunnel-dropdown').classList.add('hidden');
+});
 
 // ============================================================
 // QUERY
@@ -459,13 +498,14 @@ async function runQuery() {
   statusEl.classList.remove('hidden');
 
   try {
+    var selectedTunnels = getSelectedTunnels();
     var body = {
       start: range.start,
       end: range.end,
       direction: selectedDirection,
       sourceCidr: document.getElementById('filter-source-cidr').value || undefined,
       destCidr: document.getElementById('filter-dest-cidr').value || undefined,
-      tunnelName: document.getElementById('filter-tunnel').value || undefined,
+      tunnelNames: selectedTunnels.length > 0 && selectedTunnels.length < allTunnelNames.length ? selectedTunnels : undefined,
     };
 
     var resp = await fetch('/api/query', {
