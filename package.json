@@ -2,7 +2,7 @@
   "name": "p95-calculator",
   "version": "1.0.0",
   "private": true,
-  "description": "Magic P95 Bandwidth Calculator — Cloudflare Worker with GraphQL analytics",
+  "description": "Magic P95 Analytics — Cloudflare Worker with GraphQL analytics",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

@@ -4,7 +4,7 @@ export function renderDashboard(userEmail: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Magic P95 Bandwidth Calculator</title>
+  <title>Magic P95 Analytics</title>
   <link rel="icon" href="https://www.cloudflare.com/favicon.ico" type="image/x-icon">
   <script>
     var _origWarn = console.warn;
@@ -80,7 +80,7 @@ export function renderDashboard(userEmail: string): string {
       <div class="flex items-center gap-3">
         <svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 64 64" fill="none"><path d="M44.048 43.904H19.2l-1.28-4.352L41.216 36l3.84 3.072-.512 3.84-.496.992z" fill="#F6821F"/><path d="M45.056 43.392l-.512-1.984c-.256-.768-.128-1.536.384-2.048.384-.512.96-.768 1.664-.768h.64l1.024.128c2.304.256 4.864.384 7.552.384h.512c.256 0 .384-.128.512-.256.128-.256.128-.512 0-.768-.896-2.944-3.712-5.056-6.912-5.184l-2.048-.128-.768-1.536c-2.432-5.184-7.68-8.512-13.504-8.512-6.656 0-12.416 4.48-14.08 10.88l-.512 2.048-2.048.256c-3.84.512-6.784 3.84-6.784 7.808 0 .384 0 .768.128 1.152 0 .256.256.384.512.384h34.112c.256 0 .512-.256.64-.512l.128-.384c.128-.384.128-.64.128-.896-.128-.768-.384-1.536-.768-1.984z" fill="#FBAD41"/></svg>
         <div>
-          <h1 class="text-base font-semibold leading-tight" style="color:var(--text-strong)">Magic P95 Bandwidth Calculator</h1>
+          <h1 class="text-base font-semibold leading-tight" style="color:var(--text-strong)">Magic P95 Analytics</h1>
           <p class="text-[11px] text-cf-gray leading-tight mt-0.5">Query network analytics, visualize ingress/egress bandwidth, and calculate 95th percentile</p>
         </div>
       </div>
