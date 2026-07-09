@@ -34,6 +34,7 @@ export interface PercentilePoint {
 
 export interface DirectionStats {
   series: TimeSeriesPoint[];
+  tunnelSeries?: Record<string, TimeSeriesPoint[]>;
   p95: number;
   percentiles: PercentilePoint[];
   peakBps: number;

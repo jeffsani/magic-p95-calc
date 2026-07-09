@@ -444,13 +444,20 @@ function renderAccountsList() {
     var tokenBadge = a.has_token
       ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-900 text-green-300">Token saved</span>'
       : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-300">No token</span>';
-    return '<div class="flex items-center justify-between bg-cf-dark rounded-lg px-3 py-2 border border-cf-border">' +
+    var defaultBadge = a.is_default
+      ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-orange-900 text-orange-300">Default</span>'
+      : '';
+    var defaultBtn = a.is_default
+      ? ''
+      : '<button onclick="setDefaultAccount(' + a.id + ')" class="text-[10px] text-cf-gray hover:text-cf-orange">Set Default</button>';
+    return '<div class="flex items-center justify-between bg-cf-dark rounded-lg px-3 py-2 border border-cf-border' + (a.is_default ? ' border-orange-700' : '') + '">' +
       '<div class="flex items-center gap-3">' +
         '<span class="text-sm text-white font-medium">' + (a.account_label || a.account_tag) + '</span>' +
         '<span class="text-[10px] text-cf-gray font-mono">' + a.account_tag + '</span>' +
-        tokenBadge +
+        tokenBadge + defaultBadge +
       '</div>' +
       '<div class="flex gap-2">' +
+        defaultBtn +
         '<button onclick="editAccount(' + a.id + ')" class="text-[10px] text-cf-gray hover:text-cf-orange">Edit</button>' +
         '<button onclick="deleteAccount(' + a.id + ')" class="text-[10px] text-cf-gray hover:text-red-400">Delete</button>' +
       '</div>' +
@@ -466,11 +473,14 @@ function populateAccountDropdown() {
     return;
   }
   sel.innerHTML = savedAccounts.map(function(a) {
-    return '<option value="' + a.account_tag + '">' + (a.account_label || a.account_tag) + '</option>';
+    return '<option value="' + a.account_tag + '">' + (a.account_label || a.account_tag) + (a.is_default ? ' (default)' : '') + '</option>';
   }).join('');
-  // Restore selection or default to first
+  // Restore current selection, or use default account, or first
   if (current && savedAccounts.some(function(a) { return a.account_tag === current; })) {
     sel.value = current;
+  } else {
+    var defaultAcct = savedAccounts.find(function(a) { return a.is_default; });
+    if (defaultAcct) sel.value = defaultAcct.account_tag;
   }
   activeAccountTag = sel.value;
 }
@@ -540,6 +550,11 @@ async function editAccount(id) {
 async function deleteAccount(id) {
   if (!confirm('Remove this account?')) return;
   await fetch('/api/settings/' + id, { method: 'DELETE' });
+  loadSettings();
+}
+
+async function setDefaultAccount(id) {
+  await fetch('/api/settings/' + id + '/default', { method: 'PUT' });
   loadSettings();
 }
 
@@ -809,11 +824,11 @@ function renderResults(data) {
   // Charts
   document.getElementById('charts-section').classList.remove('hidden');
   if (selectedDirection !== 'egress') {
-    renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate');
+    renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate', data.ingress.tunnelSeries);
     renderPercentileChart('chart-ingress-pct', 'ingressPct', data.ingress.percentiles, data.ingress.p95, '#22c55e');
   }
   if (selectedDirection !== 'ingress') {
-    renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate');
+    renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate', data.egress.tunnelSeries);
     renderPercentileChart('chart-egress-pct', 'egressPct', data.egress.percentiles, data.egress.p95, '#3b82f6');
   }
 
@@ -822,38 +837,77 @@ function renderResults(data) {
   renderDataTable(data);
 }
 
-function renderTimeSeriesChart(canvasId, chartKey, series, color, label) {
+var tunnelColors = [
+  '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#eab308',
+  '#06b6d4', '#f43f5e', '#8b5cf6', '#10b981', '#d946ef',
+  '#0ea5e9', '#84cc16', '#f59e0b', '#6366f1', '#e11d48',
+];
+
+function renderTimeSeriesChart(canvasId, chartKey, series, color, label, tunnelSeries) {
   var ctx = document.getElementById(canvasId).getContext('2d');
   if (charts[chartKey]) charts[chartKey].destroy();
 
   var labels = series.map(function(p) { return formatTime(p.time); });
-  var values = series.map(function(p) { return p.bitRate; });
+  var timeIndex = {};
+  labels.forEach(function(l, i) { timeIndex[series[i].time] = i; });
+
+  var datasets = [{
+    label: label + ' (aggregate)',
+    data: series.map(function(p) { return p.bitRate; }),
+    borderColor: color,
+    backgroundColor: color + '18',
+    fill: true,
+    tension: 0.2,
+    pointRadius: 0,
+    borderWidth: 2.5,
+    order: 0,
+  }];
+
+  // Add per-tunnel lines
+  if (tunnelSeries) {
+    var tunnelNames = Object.keys(tunnelSeries).sort();
+    tunnelNames.forEach(function(name, idx) {
+      var tColor = tunnelColors[idx % tunnelColors.length];
+      var data = new Array(labels.length).fill(null);
+      tunnelSeries[name].forEach(function(p) {
+        var i = timeIndex[p.time];
+        if (i !== undefined) data[i] = (data[i] || 0) + p.bitRate;
+      });
+      datasets.push({
+        label: name,
+        data: data,
+        borderColor: tColor,
+        backgroundColor: 'transparent',
+        fill: false,
+        tension: 0.2,
+        pointRadius: 0,
+        borderWidth: 1,
+        order: 1,
+        borderDash: [4, 2],
+      });
+    });
+  }
 
   charts[chartKey] = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: label,
-        data: values,
-        borderColor: color,
-        backgroundColor: color + '18',
-        fill: true,
-        tension: 0.2,
-        pointRadius: 0,
-        borderWidth: 1.5,
-      }]
-    },
+    data: { labels: labels, datasets: datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: getChartTextColor(), font: { size: 10 }, usePointStyle: true, pointStyle: 'line', boxWidth: 20 } },
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { color: getChartTextColor(), font: { size: 9 }, usePointStyle: true, pointStyle: 'line', boxWidth: 16, padding: 8 }
+        },
         tooltip: {
           callbacks: {
             title: function(items) { return items[0].label; },
-            label: function(ctx) { return ctx.dataset.label + ': ' + formatBps(ctx.parsed.y); }
+            label: function(ctx) {
+              if (ctx.parsed.y == null) return null;
+              return ctx.dataset.label + ': ' + formatBps(ctx.parsed.y);
+            }
           }
         }
       },

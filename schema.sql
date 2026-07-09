@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   account_tag TEXT NOT NULL DEFAULT '',
   account_label TEXT NOT NULL DEFAULT '',
   api_token TEXT NOT NULL DEFAULT '',
+  is_default INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(user_email, account_tag)
 );

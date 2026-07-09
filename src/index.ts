@@ -23,7 +23,7 @@ app.get('/api/me', (c) => c.json({ email: c.get('userEmail') }));
 app.get('/api/settings', async (c) => {
   const email = c.get('userEmail');
   const rows = await c.env.DB.prepare(
-    'SELECT id, account_tag, account_label, api_token FROM user_settings WHERE user_email = ? ORDER BY account_label ASC'
+    'SELECT id, account_tag, account_label, api_token, is_default FROM user_settings WHERE user_email = ? ORDER BY is_default DESC, account_label ASC'
   ).bind(email).all();
 
   const accounts = (rows.results || []).map((r: any) => ({
@@ -31,6 +31,7 @@ app.get('/api/settings', async (c) => {
     account_tag: r.account_tag,
     account_label: r.account_label || r.account_tag,
     has_token: !!r.api_token,
+    is_default: !!r.is_default,
   }));
 
   return c.json({ accounts });
@@ -71,6 +72,19 @@ app.delete('/api/settings/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
   await c.env.DB.prepare(
     'DELETE FROM user_settings WHERE id = ? AND user_email = ?'
+  ).bind(id, email).run();
+  return c.json({ ok: true });
+});
+
+app.put('/api/settings/:id/default', async (c) => {
+  const email = c.get('userEmail');
+  const id = parseInt(c.req.param('id'));
+  // Clear all defaults for this user, then set the chosen one
+  await c.env.DB.prepare(
+    'UPDATE user_settings SET is_default = 0 WHERE user_email = ?'
+  ).bind(email).run();
+  await c.env.DB.prepare(
+    'UPDATE user_settings SET is_default = 1 WHERE id = ? AND user_email = ?'
   ).bind(id, email).run();
   return c.json({ ok: true });
 });
@@ -230,9 +244,23 @@ app.post('/api/query', async (c) => {
   const ingressP95 = calculateP95(ingressAgg);
   const egressP95 = calculateP95(egressAgg);
 
+  // Group per-tunnel series
+  function groupByTunnel(points: typeof ingressFiltered): Record<string, typeof ingressFiltered> {
+    const map: Record<string, typeof ingressFiltered> = {};
+    for (const p of points) {
+      const t = p.tunnel || 'unknown';
+      if (!map[t]) map[t] = [];
+      map[t].push(p);
+    }
+    return map;
+  }
+  const ingressByTunnel = groupByTunnel(ingressFiltered);
+  const egressByTunnel = groupByTunnel(egressFiltered);
+
   const result: BandwidthResult = {
     ingress: {
       series: ingressAgg,
+      tunnelSeries: ingressByTunnel,
       p95: ingressP95.p95,
       percentiles: ingressP95.percentiles,
       peakBps: ingressP95.peak,
@@ -240,6 +268,7 @@ app.post('/api/query', async (c) => {
     },
     egress: {
       series: egressAgg,
+      tunnelSeries: egressByTunnel,
       p95: egressP95.p95,
       percentiles: egressP95.percentiles,
       peakBps: egressP95.peak,
