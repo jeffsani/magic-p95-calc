@@ -94,13 +94,21 @@ app.post('/api/test-token', async (c) => {
   let accountTag = body.account_tag || '';
   let apiToken = body.api_token || '';
 
-  if (!accountTag || !apiToken || apiToken.startsWith('••')) {
-    // Fall back to first saved account
-    const settings = await c.env.DB.prepare(
-      'SELECT account_tag, api_token FROM user_settings WHERE user_email = ? AND account_tag != \'\' LIMIT 1'
-    ).bind(email).first();
-    if (!accountTag) accountTag = (settings?.account_tag as string) || '';
-    if (!apiToken || apiToken.startsWith('••')) apiToken = (settings?.api_token as string) || '';
+  if (!apiToken || apiToken.startsWith('••')) {
+    // Look up the saved token for the specific account
+    if (accountTag) {
+      const settings = await c.env.DB.prepare(
+        'SELECT api_token FROM user_settings WHERE user_email = ? AND account_tag = ?'
+      ).bind(email, accountTag).first();
+      apiToken = (settings?.api_token as string) || '';
+    } else {
+      // No account tag — fall back to first saved account
+      const settings = await c.env.DB.prepare(
+        'SELECT account_tag, api_token FROM user_settings WHERE user_email = ? AND account_tag != \'\' LIMIT 1'
+      ).bind(email).first();
+      accountTag = (settings?.account_tag as string) || '';
+      apiToken = (settings?.api_token as string) || '';
+    }
   }
 
   if (!accountTag) return c.json({ ok: false, error: 'Account tag is required.' }, 400);

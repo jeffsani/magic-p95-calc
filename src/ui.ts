@@ -421,6 +421,16 @@ async function loadSettings() {
     renderAccountsList();
     populateAccountDropdown();
     updateAccountBadge();
+    // Auto-discover tunnels for the active account on load
+    if (activeAccountTag) {
+      fetch('/api/test-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_tag: activeAccountTag }),
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
+      }).catch(function(){});
+    }
   } catch(e) {}
 }
 
@@ -466,14 +476,24 @@ function populateAccountDropdown() {
 }
 
 function updateAccountBadge() {
-  var badge = document.getElementById('active-account-badge');
+  var bar = document.getElementById('active-account-bar');
+  var nameEl = document.getElementById('active-account-name');
+  var tagEl = document.getElementById('active-account-tag-display');
   if (!activeAccountTag || savedAccounts.length === 0) {
-    badge.classList.add('hidden');
+    bar.classList.add('hidden');
     return;
   }
   var acct = savedAccounts.find(function(a) { return a.account_tag === activeAccountTag; });
-  badge.textContent = acct ? (acct.account_label || acct.account_tag) : activeAccountTag;
-  badge.classList.remove('hidden');
+  nameEl.textContent = acct ? (acct.account_label || acct.account_tag) : activeAccountTag;
+  tagEl.textContent = activeAccountTag;
+  bar.classList.remove('hidden');
+}
+
+function toggleFilters() {
+  var body = document.getElementById('filters-body');
+  var chevron = document.getElementById('filters-chevron');
+  body.classList.toggle('hidden');
+  chevron.style.transform = body.classList.contains('hidden') ? 'rotate(-90deg)' : '';
 }
 
 function onAccountSelected() {
@@ -485,7 +505,7 @@ function onAccountSelected() {
     fetch('/api/test-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_tag: activeAccountTag, api_token: '••••••••' }),
+      body: JSON.stringify({ account_tag: activeAccountTag }),
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
     }).catch(function(){});
