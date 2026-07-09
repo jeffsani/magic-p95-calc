@@ -1,9 +1,11 @@
 CREATE TABLE IF NOT EXISTS user_settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_email TEXT NOT NULL UNIQUE,
+  user_email TEXT NOT NULL,
   account_tag TEXT NOT NULL DEFAULT '',
+  account_label TEXT NOT NULL DEFAULT '',
   api_token TEXT NOT NULL DEFAULT '',
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_email, account_tag)
 );
 
 CREATE TABLE IF NOT EXISTS query_history (

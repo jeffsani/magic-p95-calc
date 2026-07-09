@@ -22,26 +22,32 @@ app.get('/api/me', (c) => c.json({ email: c.get('userEmail') }));
 // ─── Settings ───
 app.get('/api/settings', async (c) => {
   const email = c.get('userEmail');
-  const row = await c.env.DB.prepare(
-    'SELECT account_tag, api_token FROM user_settings WHERE user_email = ?'
-  ).bind(email).first();
+  const rows = await c.env.DB.prepare(
+    'SELECT id, account_tag, account_label, api_token FROM user_settings WHERE user_email = ? ORDER BY account_label ASC'
+  ).bind(email).all();
 
-  return c.json({
-    account_tag: row?.account_tag || '',
-    api_token: row?.api_token ? '••••••••' : '',
-    has_token: !!(row?.api_token),
-  });
+  const accounts = (rows.results || []).map((r: any) => ({
+    id: r.id,
+    account_tag: r.account_tag,
+    account_label: r.account_label || r.account_tag,
+    has_token: !!r.api_token,
+  }));
+
+  return c.json({ accounts });
 });
 
 app.post('/api/settings', async (c) => {
   const email = c.get('userEmail');
-  const body = await c.req.json<{ account_tag?: string; api_token?: string }>();
+  const body = await c.req.json<{ account_tag?: string; account_label?: string; api_token?: string }>();
+
+  const accountTag = (body.account_tag ?? '').trim();
+  const accountLabel = (body.account_label ?? '').trim() || accountTag;
+  if (!accountTag) return c.json({ ok: false, error: 'Account tag is required.' }, 400);
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, api_token FROM user_settings WHERE user_email = ?'
-  ).bind(email).first();
+    'SELECT id, api_token FROM user_settings WHERE user_email = ? AND account_tag = ?'
+  ).bind(email, accountTag).first();
 
-  const accountTag = body.account_tag ?? '';
   // If token is masked or empty, keep existing
   const apiToken = (body.api_token && !body.api_token.startsWith('••'))
     ? body.api_token
@@ -49,15 +55,34 @@ app.post('/api/settings', async (c) => {
 
   if (existing) {
     await c.env.DB.prepare(
-      'UPDATE user_settings SET account_tag = ?, api_token = ?, updated_at = datetime(\'now\') WHERE user_email = ?'
-    ).bind(accountTag, apiToken, email).run();
+      'UPDATE user_settings SET account_label = ?, api_token = ?, updated_at = datetime(\'now\') WHERE id = ?'
+    ).bind(accountLabel, apiToken, existing.id).run();
   } else {
     await c.env.DB.prepare(
-      'INSERT INTO user_settings (user_email, account_tag, api_token) VALUES (?, ?, ?)'
-    ).bind(email, accountTag, apiToken).run();
+      'INSERT INTO user_settings (user_email, account_tag, account_label, api_token) VALUES (?, ?, ?, ?)'
+    ).bind(email, accountTag, accountLabel, apiToken).run();
   }
 
   return c.json({ ok: true });
+});
+
+app.delete('/api/settings/:id', async (c) => {
+  const email = c.get('userEmail');
+  const id = parseInt(c.req.param('id'));
+  await c.env.DB.prepare(
+    'DELETE FROM user_settings WHERE id = ? AND user_email = ?'
+  ).bind(id, email).run();
+  return c.json({ ok: true });
+});
+
+app.get('/api/settings/:id/token', async (c) => {
+  const email = c.get('userEmail');
+  const id = parseInt(c.req.param('id'));
+  const row = await c.env.DB.prepare(
+    'SELECT account_tag, api_token FROM user_settings WHERE id = ? AND user_email = ?'
+  ).bind(id, email).first();
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  return c.json({ account_tag: row.account_tag, api_token: row.api_token });
 });
 
 // ─── Test Token ───
@@ -70,14 +95,15 @@ app.post('/api/test-token', async (c) => {
   let apiToken = body.api_token || '';
 
   if (!accountTag || !apiToken || apiToken.startsWith('••')) {
+    // Fall back to first saved account
     const settings = await c.env.DB.prepare(
-      'SELECT account_tag, api_token FROM user_settings WHERE user_email = ?'
+      'SELECT account_tag, api_token FROM user_settings WHERE user_email = ? AND account_tag != \'\' LIMIT 1'
     ).bind(email).first();
     if (!accountTag) accountTag = (settings?.account_tag as string) || '';
     if (!apiToken || apiToken.startsWith('••')) apiToken = (settings?.api_token as string) || '';
   }
 
-  if (!accountTag) return c.json({ ok: false, error: 'Account ID is required.' }, 400);
+  if (!accountTag) return c.json({ ok: false, error: 'Account tag is required.' }, 400);
   if (!apiToken) return c.json({ ok: false, error: 'API token is required.' }, 400);
 
   // Query last 24h to discover all unique tunnel names
@@ -148,13 +174,15 @@ app.post('/api/query', async (c) => {
     accountTag?: string;
   }>();
 
-  // Load user settings
-  const settings = await c.env.DB.prepare(
-    'SELECT account_tag, api_token FROM user_settings WHERE user_email = ?'
-  ).bind(email).first();
-
-  const accountTag = body.accountTag || (settings?.account_tag as string) || '';
-  const apiToken = (settings?.api_token as string) || '';
+  // Load the matching account's token
+  const accountTag = body.accountTag || '';
+  let apiToken = '';
+  if (accountTag) {
+    const settings = await c.env.DB.prepare(
+      'SELECT api_token FROM user_settings WHERE user_email = ? AND account_tag = ?'
+    ).bind(email, accountTag).first();
+    apiToken = (settings?.api_token as string) || '';
+  }
 
   if (!accountTag) {
     return c.json({ error: 'Account tag is required. Configure it in Settings.' }, 400);
@@ -165,26 +193,22 @@ app.post('/api/query', async (c) => {
 
   const direction = body.direction || 'both';
 
-  const queryParams: BandwidthQuery = {
+  // 1. Always run the tunnel query for the real P95 (billing metric)
+  const tunnelParams: BandwidthQuery = {
     accountTag,
     apiToken,
     start: body.start,
     end: body.end,
     direction,
-    sourceCidr: body.sourceCidr,
-    destCidr: body.destCidr,
   };
 
-  const raw = await queryBandwidth(queryParams);
+  const raw = await queryBandwidth(tunnelParams);
 
   if (raw.error) {
     return c.json({ error: raw.error }, 502);
   }
 
-  // Per the CNI P95 guide:
-  //   1. Filter to selected tunnels
-  //   2. Sum bitRate across selected tunnels per 5-min interval
-  //   3. Compute P95 on the aggregated (summed) values
+  // Filter to selected tunnels, then aggregate per interval
   let ingressFiltered = raw.ingress;
   let egressFiltered = raw.egress;
   if (body.tunnelNames && body.tunnelNames.length > 0) {
@@ -193,11 +217,8 @@ app.post('/api/query', async (c) => {
     egressFiltered = raw.egress.filter(p => p.tunnel && tunnelSet.has(p.tunnel));
   }
 
-  // Aggregate: sum across tunnels per time interval
   const ingressAgg = aggregateByTime(ingressFiltered);
   const egressAgg = aggregateByTime(egressFiltered);
-
-  // Calculate P95 on the aggregated sums
   const ingressP95 = calculateP95(ingressAgg);
   const egressP95 = calculateP95(egressAgg);
 
@@ -230,6 +251,48 @@ app.post('/api/query', async (c) => {
       },
     },
   };
+
+  // 2. If CIDR filters are set, run a supplementary Network Analytics query
+  if (body.sourceCidr || body.destCidr) {
+    const cidrParams: BandwidthQuery = {
+      accountTag,
+      apiToken,
+      start: body.start,
+      end: body.end,
+      direction,
+      sourceCidr: body.sourceCidr,
+      destCidr: body.destCidr,
+    };
+
+    const cidrRaw = await queryBandwidth(cidrParams);
+
+    if (!cidrRaw.error) {
+      const cidrIngressAgg = aggregateByTime(cidrRaw.ingress);
+      const cidrEgressAgg = aggregateByTime(cidrRaw.egress);
+      const cidrIngressP95 = calculateP95(cidrIngressAgg);
+      const cidrEgressP95 = calculateP95(cidrEgressAgg);
+
+      const filterDesc = [body.sourceCidr ? 'src: ' + body.sourceCidr : '', body.destCidr ? 'dst: ' + body.destCidr : ''].filter(Boolean).join(', ');
+
+      result.cidr = {
+        ingress: {
+          series: cidrIngressAgg,
+          p95: cidrIngressP95.p95,
+          percentiles: cidrIngressP95.percentiles,
+          peakBps: cidrIngressP95.peak,
+          avgBps: cidrIngressP95.avg,
+        },
+        egress: {
+          series: cidrEgressAgg,
+          p95: cidrEgressP95.p95,
+          percentiles: cidrEgressP95.percentiles,
+          peakBps: cidrEgressP95.peak,
+          avgBps: cidrEgressP95.avg,
+        },
+        filter: filterDesc,
+      };
+    }
+  }
 
   // Save to history
   try {

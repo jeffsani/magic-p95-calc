@@ -4,7 +4,7 @@ export function renderDashboard(userEmail: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Magic Transit P95 Bandwidth Calculator</title>
+  <title>Magic P95 Bandwidth Calculator</title>
   <link rel="icon" href="https://www.cloudflare.com/favicon.ico" type="image/x-icon">
   <script>
     var _origWarn = console.warn;
@@ -80,8 +80,8 @@ export function renderDashboard(userEmail: string): string {
       <div class="flex items-center gap-3">
         <svg class="w-7 h-7 flex-shrink-0" viewBox="0 0 64 64" fill="none"><path d="M44.048 43.904H19.2l-1.28-4.352L41.216 36l3.84 3.072-.512 3.84-.496.992z" fill="#F6821F"/><path d="M45.056 43.392l-.512-1.984c-.256-.768-.128-1.536.384-2.048.384-.512.96-.768 1.664-.768h.64l1.024.128c2.304.256 4.864.384 7.552.384h.512c.256 0 .384-.128.512-.256.128-.256.128-.512 0-.768-.896-2.944-3.712-5.056-6.912-5.184l-2.048-.128-.768-1.536c-2.432-5.184-7.68-8.512-13.504-8.512-6.656 0-12.416 4.48-14.08 10.88l-.512 2.048-2.048.256c-3.84.512-6.784 3.84-6.784 7.808 0 .384 0 .768.128 1.152 0 .256.256.384.512.384h34.112c.256 0 .512-.256.64-.512l.128-.384c.128-.384.128-.64.128-.896-.128-.768-.384-1.536-.768-1.984z" fill="#FBAD41"/></svg>
         <div>
-          <h1 class="text-base font-semibold leading-tight" style="color:var(--text-strong)">Magic Transit P95 Bandwidth Calculator</h1>
-          <p class="text-[11px] text-cf-gray leading-tight mt-0.5">Query Magic Transit network analytics, visualize ingress/egress bandwidth, and calculate 95th percentile</p>
+          <h1 class="text-base font-semibold leading-tight" style="color:var(--text-strong)">Magic P95 Bandwidth Calculator</h1>
+          <p class="text-[11px] text-cf-gray leading-tight mt-0.5">Query network analytics, visualize ingress/egress bandwidth, and calculate 95th percentile</p>
         </div>
       </div>
       <div class="flex items-center gap-3">
@@ -101,33 +101,61 @@ export function renderDashboard(userEmail: string): string {
 
     <!-- Settings Panel (collapsible) -->
     <div id="settings-panel" class="panel fade-in p-5 space-y-4 no-print hidden">
-      <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Settings</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-medium text-cf-gray mb-1">Cloudflare Account Tag</label>
-          <input type="text" id="cfg-account-tag" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. 7a0c39354edd897a1a98f6c7e50c6873">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Accounts</h2>
+        <button onclick="showAddAccount()" class="px-3 py-1 text-xs font-semibold rounded-lg border border-cf-border text-cf-gray hover:border-cf-orange hover:text-cf-orange">+ Add Account</button>
+      </div>
+
+      <!-- Saved accounts list -->
+      <div id="accounts-list" class="space-y-2"></div>
+
+      <!-- Add/Edit account form (hidden by default) -->
+      <div id="account-form" class="hidden border border-cf-border rounded-lg p-4 space-y-3">
+        <h3 class="text-xs font-semibold" style="color:var(--text-strong)" id="account-form-title">Add Account</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-cf-gray mb-1">Label <span class="text-[10px]">(optional)</span></label>
+            <input type="text" id="cfg-account-label" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. Production">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-cf-gray mb-1">Account Tag</label>
+            <input type="text" id="cfg-account-tag" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. 7a0c39354edd897a1a98f6c7e50c6873">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-cf-gray mb-1">API Token <span class="text-[10px]">(Account Analytics: Read)</span></label>
+            <input type="password" id="cfg-api-token" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="Bearer token">
+          </div>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-cf-gray mb-1">API Token <span class="text-[10px]">(Account Analytics: Read)</span></label>
-          <input type="password" id="cfg-api-token" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="Bearer token with analytics read permission">
+        <div class="flex gap-2 items-center">
+          <button onclick="saveAccount()" class="px-4 py-1.5 bg-cf-orange text-black text-xs font-semibold rounded-lg hover:opacity-90">Save Account</button>
+          <button onclick="testToken()" class="px-4 py-1.5 border border-cf-border text-cf-gray text-xs font-semibold rounded-lg hover:border-cf-orange hover:text-cf-orange">Test Connection</button>
+          <button onclick="hideAccountForm()" class="px-4 py-1.5 text-xs text-cf-gray hover:text-white">Cancel</button>
+          <span id="settings-status" class="text-xs text-cf-gray self-center"></span>
         </div>
       </div>
-      <div class="flex gap-2 items-center">
-        <button onclick="saveSettings()" class="px-4 py-1.5 bg-cf-orange text-black text-xs font-semibold rounded-lg hover:opacity-90">Save Settings</button>
-        <button onclick="testToken()" class="px-4 py-1.5 border border-cf-border text-cf-gray text-xs font-semibold rounded-lg hover:border-cf-orange hover:text-cf-orange">Test Connection</button>
-        <span id="settings-status" class="text-xs text-cf-gray self-center"></span>
+
+      <!-- Active account selector (shown in filter area) -->
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-cf-gray">Active Account:</label>
+        <select id="active-account-select" onchange="onAccountSelected()" class="bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white">
+          <option value="">No accounts configured</option>
+        </select>
       </div>
     </div>
 
-    <!-- Filters Panel -->
-    <div class="panel fade-in p-5 space-y-4 no-print">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Query Filters</h2>
-        <button onclick="runQuery()" id="query-btn" class="px-5 py-2 bg-cf-orange text-black text-xs font-bold rounded-lg hover:opacity-90 flex items-center gap-2">
+    <!-- Filters Panel (collapsible) -->
+    <div class="panel fade-in p-5 no-print">
+      <div class="flex items-center justify-between cursor-pointer" onclick="toggleFilters()">
+        <div class="flex items-center gap-2">
+          <svg id="filters-chevron" class="w-4 h-4 text-cf-gray transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Query Filters</h2>
+        </div>
+        <button onclick="event.stopPropagation(); runQuery()" id="query-btn" class="px-5 py-2 bg-cf-orange text-black text-xs font-bold rounded-lg hover:opacity-90 flex items-center gap-2">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           Run Query
         </button>
       </div>
+      <div id="filters-body" class="space-y-4 mt-4">
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <!-- Direction -->
@@ -185,7 +213,7 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Custom Date Pickers -->
         <div id="custom-dates" class="lg:col-span-2 hidden">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range</label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range <span class="text-[10px] text-cf-gray">(max 16 weeks back)</span></label>
           <div class="flex gap-2">
             <input type="datetime-local" id="custom-start" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
             <span class="text-cf-gray self-center text-xs">to</span>
@@ -197,34 +225,46 @@ export function renderDashboard(userEmail: string): string {
 
       <!-- Status -->
       <div id="query-status" class="text-xs text-cf-gray hidden"></div>
+      </div>
+    </div>
+
+    <!-- Active Account Bar -->
+    <div id="active-account-bar" class="hidden">
+      <div class="panel fade-in px-4 py-2.5 flex items-center gap-3">
+        <svg class="w-4 h-4 text-cf-orange flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <div>
+          <span class="text-xs font-semibold" style="color:var(--text-strong)" id="active-account-name"></span>
+          <span class="text-[10px] text-cf-gray font-mono ml-2" id="active-account-tag-display"></span>
+        </div>
+      </div>
     </div>
 
     <!-- P95 Summary Cards -->
     <div id="p95-summary" class="hidden">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="p95-highlight stat-card fade-in">
+        <div class="p95-highlight stat-card fade-in dir-ingress">
           <div class="stat-value" id="p95-ingress">—</div>
           <div class="stat-label">P95 Ingress</div>
         </div>
-        <div class="p95-highlight stat-card fade-in">
+        <div class="p95-highlight stat-card fade-in dir-egress">
           <div class="stat-value" id="p95-egress">—</div>
           <div class="stat-label">P95 Egress</div>
         </div>
-        <div class="panel stat-card fade-in">
+        <div class="panel stat-card fade-in dir-ingress">
           <div class="stat-value" id="peak-ingress" style="color:var(--text-strong);font-size:1.1rem">—</div>
           <div class="stat-label">Peak Ingress</div>
         </div>
-        <div class="panel stat-card fade-in">
+        <div class="panel stat-card fade-in dir-egress">
           <div class="stat-value" id="peak-egress" style="color:var(--text-strong);font-size:1.1rem">—</div>
           <div class="stat-label">Peak Egress</div>
         </div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-        <div class="panel stat-card fade-in">
+        <div class="panel stat-card fade-in dir-ingress">
           <div class="stat-value" id="avg-ingress" style="color:var(--text-strong);font-size:1.1rem">—</div>
           <div class="stat-label">Avg Ingress</div>
         </div>
-        <div class="panel stat-card fade-in">
+        <div class="panel stat-card fade-in dir-egress">
           <div class="stat-value" id="avg-egress" style="color:var(--text-strong);font-size:1.1rem">—</div>
           <div class="stat-label">Avg Egress</div>
         </div>
@@ -237,28 +277,53 @@ export function renderDashboard(userEmail: string): string {
           <div class="stat-label">Interval</div>
         </div>
       </div>
+
+      <!-- CIDR Subset Row (shown only when CIDR filters are active) -->
+      <div id="cidr-summary" class="hidden mt-3">
+        <div class="text-[10px] text-cf-gray mb-2">CIDR Subset: <span id="cidr-filter-label" class="text-white font-mono"></span></div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="panel stat-card fade-in dir-ingress" style="border-left:3px solid #f59e0b">
+            <div class="stat-value" id="cidr-p95-ingress" style="color:#f59e0b;font-size:1.1rem">—</div>
+            <div class="stat-label">CIDR P95 Ingress</div>
+            <div class="text-[10px] text-cf-gray" id="cidr-pct-ingress"></div>
+          </div>
+          <div class="panel stat-card fade-in dir-egress" style="border-left:3px solid #f59e0b">
+            <div class="stat-value" id="cidr-p95-egress" style="color:#f59e0b;font-size:1.1rem">—</div>
+            <div class="stat-label">CIDR P95 Egress</div>
+            <div class="text-[10px] text-cf-gray" id="cidr-pct-egress"></div>
+          </div>
+          <div class="panel stat-card fade-in dir-ingress">
+            <div class="stat-value" id="cidr-peak-ingress" style="color:var(--text-strong);font-size:1rem">—</div>
+            <div class="stat-label">CIDR Peak Ingress</div>
+          </div>
+          <div class="panel stat-card fade-in dir-egress">
+            <div class="stat-value" id="cidr-peak-egress" style="color:var(--text-strong);font-size:1rem">—</div>
+            <div class="stat-label">CIDR Peak Egress</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Charts: 4-panel layout -->
     <div id="charts-section" class="hidden">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <!-- Ingress Time Series -->
-        <div class="panel p-4 fade-in">
+        <div class="panel p-4 fade-in dir-ingress">
           <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate <span class="text-cf-gray font-normal" id="ingress-interval-label">(avg over 5min window)</span></h3>
           <div style="height:280px"><canvas id="chart-ingress-ts"></canvas></div>
         </div>
         <!-- Ingress Percentile -->
-        <div class="panel p-4 fade-in">
+        <div class="panel p-4 fade-in dir-ingress">
           <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="ingress-pct-label">(avg over 5min window)</span></h3>
           <div style="height:280px"><canvas id="chart-ingress-pct"></canvas></div>
         </div>
         <!-- Egress Time Series -->
-        <div class="panel p-4 fade-in">
+        <div class="panel p-4 fade-in dir-egress">
           <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate <span class="text-cf-gray font-normal" id="egress-interval-label">(avg over 5min window)</span></h3>
           <div style="height:280px"><canvas id="chart-egress-ts"></canvas></div>
         </div>
         <!-- Egress Percentile -->
-        <div class="panel p-4 fade-in">
+        <div class="panel p-4 fade-in dir-egress">
           <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="egress-pct-label">(avg over 5min window)</span></h3>
           <div style="height:280px"><canvas id="chart-egress-pct"></canvas></div>
         </div>
@@ -270,7 +335,10 @@ export function renderDashboard(userEmail: string): string {
       <div class="panel p-4 fade-in">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-xs font-semibold" style="color:var(--text-strong)">Raw Data</h3>
-          <button onclick="toggleDataTable()" class="text-[11px] text-cf-gray hover:text-cf-orange">Show/Hide</button>
+          <div class="flex gap-3">
+            <button onclick="exportCsv()" class="text-[11px] text-cf-gray hover:text-cf-orange">Export CSV</button>
+            <button onclick="toggleDataTable()" class="text-[11px] text-cf-gray hover:text-cf-orange">Show/Hide</button>
+          </div>
         </div>
         <div id="data-table-body" class="hidden overflow-x-auto">
           <table class="w-full text-xs">
@@ -336,40 +404,151 @@ function updateChartTheme() {
 // ============================================================
 // SETTINGS
 // ============================================================
+var savedAccounts = [];
+var activeAccountTag = '';
+
 function toggleSettings() {
   var panel = document.getElementById('settings-panel');
   panel.classList.toggle('hidden');
   if (!panel.classList.contains('hidden')) loadSettings();
 }
+
 async function loadSettings() {
   try {
     var resp = await fetch('/api/settings');
     var data = await resp.json();
-    document.getElementById('cfg-account-tag').value = data.account_tag || '';
-    if (data.has_token) document.getElementById('cfg-api-token').value = '••••••••';
+    savedAccounts = data.accounts || [];
+    renderAccountsList();
+    populateAccountDropdown();
+    updateAccountBadge();
   } catch(e) {}
 }
-async function saveSettings() {
+
+function renderAccountsList() {
+  var container = document.getElementById('accounts-list');
+  if (savedAccounts.length === 0) {
+    container.innerHTML = '<p class="text-xs text-cf-gray">No accounts configured. Click "+ Add Account" to get started.</p>';
+    return;
+  }
+  container.innerHTML = savedAccounts.map(function(a) {
+    var tokenBadge = a.has_token
+      ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-900 text-green-300">Token saved</span>'
+      : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-300">No token</span>';
+    return '<div class="flex items-center justify-between bg-cf-dark rounded-lg px-3 py-2 border border-cf-border">' +
+      '<div class="flex items-center gap-3">' +
+        '<span class="text-sm text-white font-medium">' + (a.account_label || a.account_tag) + '</span>' +
+        '<span class="text-[10px] text-cf-gray font-mono">' + a.account_tag + '</span>' +
+        tokenBadge +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="editAccount(' + a.id + ')" class="text-[10px] text-cf-gray hover:text-cf-orange">Edit</button>' +
+        '<button onclick="deleteAccount(' + a.id + ')" class="text-[10px] text-cf-gray hover:text-red-400">Delete</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function populateAccountDropdown() {
+  var sel = document.getElementById('active-account-select');
+  var current = activeAccountTag || sel.value;
+  if (savedAccounts.length === 0) {
+    sel.innerHTML = '<option value="">No accounts configured</option>';
+    return;
+  }
+  sel.innerHTML = savedAccounts.map(function(a) {
+    return '<option value="' + a.account_tag + '">' + (a.account_label || a.account_tag) + '</option>';
+  }).join('');
+  // Restore selection or default to first
+  if (current && savedAccounts.some(function(a) { return a.account_tag === current; })) {
+    sel.value = current;
+  }
+  activeAccountTag = sel.value;
+}
+
+function updateAccountBadge() {
+  var badge = document.getElementById('active-account-badge');
+  if (!activeAccountTag || savedAccounts.length === 0) {
+    badge.classList.add('hidden');
+    return;
+  }
+  var acct = savedAccounts.find(function(a) { return a.account_tag === activeAccountTag; });
+  badge.textContent = acct ? (acct.account_label || acct.account_tag) : activeAccountTag;
+  badge.classList.remove('hidden');
+}
+
+function onAccountSelected() {
+  var sel = document.getElementById('active-account-select');
+  activeAccountTag = sel.value;
+  updateAccountBadge();
+  // Auto-discover tunnels for the selected account
+  if (activeAccountTag) {
+    fetch('/api/test-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_tag: activeAccountTag, api_token: '••••••••' }),
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
+    }).catch(function(){});
+  }
+}
+
+function showAddAccount() {
+  document.getElementById('account-form').classList.remove('hidden');
+  document.getElementById('account-form-title').textContent = 'Add Account';
+  document.getElementById('cfg-account-label').value = '';
+  document.getElementById('cfg-account-tag').value = '';
+  document.getElementById('cfg-account-tag').removeAttribute('disabled');
+  document.getElementById('cfg-api-token').value = '';
+}
+
+function hideAccountForm() {
+  document.getElementById('account-form').classList.add('hidden');
+  document.getElementById('settings-status').textContent = '';
+}
+
+async function editAccount(id) {
+  var acct = savedAccounts.find(function(a) { return a.id === id; });
+  if (!acct) return;
+  document.getElementById('account-form').classList.remove('hidden');
+  document.getElementById('account-form-title').textContent = 'Edit Account';
+  document.getElementById('cfg-account-label').value = acct.account_label || '';
+  document.getElementById('cfg-account-tag').value = acct.account_tag;
+  document.getElementById('cfg-account-tag').setAttribute('disabled', 'true');
+  document.getElementById('cfg-api-token').value = acct.has_token ? '••••••••' : '';
+}
+
+async function deleteAccount(id) {
+  if (!confirm('Remove this account?')) return;
+  await fetch('/api/settings/' + id, { method: 'DELETE' });
+  loadSettings();
+}
+
+async function saveAccount() {
   var status = document.getElementById('settings-status');
   status.textContent = 'Saving...';
+  status.style.color = '';
   try {
     var resp = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         account_tag: document.getElementById('cfg-account-tag').value,
+        account_label: document.getElementById('cfg-account-label').value,
         api_token: document.getElementById('cfg-api-token').value,
       }),
     });
     var data = await resp.json();
-    status.textContent = data.ok ? 'Saved!' : 'Error saving';
     if (data.ok) {
-      setTimeout(function() { document.getElementById('settings-panel').classList.add('hidden'); status.textContent = ''; }, 1000);
+      status.style.color = '#10B981';
+      status.textContent = 'Saved!';
+      setTimeout(function() { hideAccountForm(); loadSettings(); }, 800);
     } else {
-      setTimeout(function() { status.textContent = ''; }, 2000);
+      status.style.color = '#EF4444';
+      status.textContent = data.error || 'Error saving';
     }
-  } catch(e) { status.textContent = 'Error: ' + e.message; }
+  } catch(e) { status.style.color = '#EF4444'; status.textContent = 'Error: ' + e.message; }
 }
+
 async function testToken() {
   var status = document.getElementById('settings-status');
   status.textContent = 'Testing...';
@@ -400,19 +579,12 @@ async function testToken() {
     status.textContent = 'Error: ' + e.message;
   }
 }
+
 // Load settings, user info, and tunnel list on page load
 (function(){
   loadSettings();
   fetch('/api/me').then(function(r) { return r.json(); }).then(function(d) {
     if (d.email) document.getElementById('user-email').textContent = d.email;
-  }).catch(function(){});
-  // Auto-discover tunnels using saved settings
-  fetch('/api/test-token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ account_tag: '', api_token: '' }),
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
   }).catch(function(){});
 })();
 
@@ -423,22 +595,41 @@ function setDirection(el) {
   document.querySelectorAll('[data-dir]').forEach(function(c) { c.classList.remove('active'); });
   el.classList.add('active');
   selectedDirection = el.getAttribute('data-dir');
+  applyDirectionVisibility(selectedDirection);
 }
+function applyDirectionVisibility(dir) {
+  var showIngress = dir !== 'egress';
+  var showEgress = dir !== 'ingress';
+  document.querySelectorAll('.dir-ingress').forEach(function(el) { el.style.display = showIngress ? '' : 'none'; });
+  document.querySelectorAll('.dir-egress').forEach(function(el) { el.style.display = showEgress ? '' : 'none'; });
+}
+var MAX_RETENTION_MS = 16 * 7 * 86400000; // 16 weeks in ms
+
 function setTimeRange(el) {
   document.querySelectorAll('[data-range]').forEach(function(c) { c.classList.remove('active'); });
   el.classList.add('active');
   selectedRange = el.getAttribute('data-range');
-  document.getElementById('custom-dates').classList.toggle('hidden', selectedRange !== 'custom');
+  var customPanel = document.getElementById('custom-dates');
+  customPanel.classList.toggle('hidden', selectedRange !== 'custom');
+  if (selectedRange === 'custom') {
+    // Set min to 16 weeks ago
+    var minStr = new Date(Date.now() - MAX_RETENTION_MS).toISOString().slice(0, 16);
+    document.getElementById('custom-start').setAttribute('min', minStr);
+    document.getElementById('custom-end').setAttribute('min', minStr);
+  }
 }
 
 function getTimeRange() {
+  var now = new Date();
+  var minDate = new Date(now.getTime() - MAX_RETENTION_MS);
   if (selectedRange === 'custom') {
     var s = document.getElementById('custom-start').value;
     var e = document.getElementById('custom-end').value;
     if (!s || !e) return null;
-    return { start: new Date(s).toISOString(), end: new Date(e).toISOString() };
+    var startDate = new Date(s);
+    if (startDate < minDate) startDate = minDate;
+    return { start: startDate.toISOString(), end: new Date(e).toISOString() };
   }
-  var now = new Date();
   var ms = { '1h': 3600000, '6h': 21600000, '24h': 86400000, '48h': 172800000, '7d': 604800000, '14d': 1209600000, '30d': 2592000000 };
   var offset = ms[selectedRange] || 86400000;
   return { start: new Date(now.getTime() - offset).toISOString(), end: now.toISOString() };
@@ -499,6 +690,8 @@ async function runQuery() {
 
   try {
     var selectedTunnels = getSelectedTunnels();
+    var acctTag = activeAccountTag || document.getElementById('active-account-select').value;
+    if (!acctTag) { statusEl.textContent = 'Please select an account in Settings.'; statusEl.classList.remove('hidden'); btn.disabled = false; btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Run Query'; return; }
     var body = {
       start: range.start,
       end: range.end,
@@ -506,6 +699,7 @@ async function runQuery() {
       sourceCidr: document.getElementById('filter-source-cidr').value || undefined,
       destCidr: document.getElementById('filter-dest-cidr').value || undefined,
       tunnelNames: selectedTunnels.length > 0 && selectedTunnels.length < allTunnelNames.length ? selectedTunnels : undefined,
+      accountTag: acctTag,
     };
 
     var resp = await fetch('/api/query', {
@@ -549,6 +743,7 @@ function formatTime(iso) {
 }
 
 function renderResults(data) {
+  lastQueryData = data;
   // P95 summary
   document.getElementById('p95-summary').classList.remove('hidden');
   document.getElementById('p95-ingress').textContent = formatBps(data.ingress.p95);
@@ -559,6 +754,22 @@ function renderResults(data) {
   document.getElementById('avg-egress').textContent = formatBps(data.egress.avgBps);
   document.getElementById('data-points').textContent = data.ingress.series.length + ' / ' + data.egress.series.length;
   document.getElementById('query-interval').textContent = data.interval + (data.chunks > 1 ? ' (' + data.chunks + ' chunks)' : '');
+
+  // CIDR subset
+  if (data.cidr) {
+    document.getElementById('cidr-summary').classList.remove('hidden');
+    document.getElementById('cidr-filter-label').textContent = data.cidr.filter;
+    document.getElementById('cidr-p95-ingress').textContent = formatBps(data.cidr.ingress.p95);
+    document.getElementById('cidr-p95-egress').textContent = formatBps(data.cidr.egress.p95);
+    document.getElementById('cidr-peak-ingress').textContent = formatBps(data.cidr.ingress.peakBps);
+    document.getElementById('cidr-peak-egress').textContent = formatBps(data.cidr.egress.peakBps);
+    var pctIn = data.ingress.p95 > 0 ? ((data.cidr.ingress.p95 / data.ingress.p95) * 100).toFixed(1) : '0.0';
+    var pctEg = data.egress.p95 > 0 ? ((data.cidr.egress.p95 / data.egress.p95) * 100).toFixed(1) : '0.0';
+    document.getElementById('cidr-pct-ingress').textContent = pctIn + '% of total P95';
+    document.getElementById('cidr-pct-egress').textContent = pctEg + '% of total P95';
+  } else {
+    document.getElementById('cidr-summary').classList.add('hidden');
+  }
 
   // Update interval labels
   var intervalLabel = '(avg over ' + data.interval + ' window)';
@@ -572,12 +783,19 @@ function renderResults(data) {
     populateTunnelFilter(data.tunnels);
   }
 
+  // Show/hide panels based on direction
+  applyDirectionVisibility(selectedDirection);
+
   // Charts
   document.getElementById('charts-section').classList.remove('hidden');
-  renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate');
-  renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate');
-  renderPercentileChart('chart-ingress-pct', 'ingressPct', data.ingress.percentiles, data.ingress.p95, '#22c55e');
-  renderPercentileChart('chart-egress-pct', 'egressPct', data.egress.percentiles, data.egress.p95, '#3b82f6');
+  if (selectedDirection !== 'egress') {
+    renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate');
+    renderPercentileChart('chart-ingress-pct', 'ingressPct', data.ingress.percentiles, data.ingress.p95, '#22c55e');
+  }
+  if (selectedDirection !== 'ingress') {
+    renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate');
+    renderPercentileChart('chart-egress-pct', 'egressPct', data.egress.percentiles, data.egress.p95, '#3b82f6');
+  }
 
   // Data table
   document.getElementById('data-table-section').classList.remove('hidden');
@@ -696,6 +914,50 @@ function renderDataTable(data) {
 
 function toggleDataTable() {
   document.getElementById('data-table-body').classList.toggle('hidden');
+}
+
+var lastQueryData = null;
+
+function exportCsv() {
+  if (!lastQueryData) return;
+  var rows = [['Time', 'Direction', 'Bit Rate (bps)', 'Bits', 'Packets']];
+  lastQueryData.ingress.series.forEach(function(p) {
+    rows.push([p.time, 'ingress', p.bitRate, p.bits, p.packets]);
+  });
+  lastQueryData.egress.series.forEach(function(p) {
+    rows.push([p.time, 'egress', p.bitRate, p.bits, p.packets]);
+  });
+  rows.sort(function(a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+
+  // Add summary rows
+  rows.push([]);
+  rows.push(['P95 Ingress (bps)', lastQueryData.ingress.p95]);
+  rows.push(['P95 Egress (bps)', lastQueryData.egress.p95]);
+  rows.push(['Peak Ingress (bps)', lastQueryData.ingress.peakBps]);
+  rows.push(['Peak Egress (bps)', lastQueryData.egress.peakBps]);
+  rows.push(['Avg Ingress (bps)', lastQueryData.ingress.avgBps]);
+  rows.push(['Avg Egress (bps)', lastQueryData.egress.avgBps]);
+  if (lastQueryData.cidr) {
+    rows.push([]);
+    rows.push(['CIDR Filter', lastQueryData.cidr.filter]);
+    rows.push(['CIDR P95 Ingress (bps)', lastQueryData.cidr.ingress.p95]);
+    rows.push(['CIDR P95 Egress (bps)', lastQueryData.cidr.egress.p95]);
+    var pctIn = lastQueryData.ingress.p95 > 0 ? ((lastQueryData.cidr.ingress.p95 / lastQueryData.ingress.p95) * 100).toFixed(1) : '0.0';
+    var pctEg = lastQueryData.egress.p95 > 0 ? ((lastQueryData.cidr.egress.p95 / lastQueryData.egress.p95) * 100).toFixed(1) : '0.0';
+    rows.push(['CIDR % of Total P95 Ingress', pctIn + '%']);
+    rows.push(['CIDR % of Total P95 Egress', pctEg + '%']);
+    rows.push(['CIDR Peak Ingress (bps)', lastQueryData.cidr.ingress.peakBps]);
+    rows.push(['CIDR Peak Egress (bps)', lastQueryData.cidr.egress.peakBps]);
+  }
+
+  var csv = rows.map(function(r) { return r.join(','); }).join('\\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'p95-bandwidth-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>

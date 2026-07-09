@@ -32,20 +32,21 @@ export interface PercentilePoint {
   value: number;
 }
 
+export interface DirectionStats {
+  series: TimeSeriesPoint[];
+  p95: number;
+  percentiles: PercentilePoint[];
+  peakBps: number;
+  avgBps: number;
+}
+
 export interface BandwidthResult {
-  ingress: {
-    series: TimeSeriesPoint[];
-    p95: number;
-    percentiles: PercentilePoint[];
-    peakBps: number;
-    avgBps: number;
-  };
-  egress: {
-    series: TimeSeriesPoint[];
-    p95: number;
-    percentiles: PercentilePoint[];
-    peakBps: number;
-    avgBps: number;
+  ingress: DirectionStats;
+  egress: DirectionStats;
+  cidr?: {
+    ingress: DirectionStats;
+    egress: DirectionStats;
+    filter: string;
   };
   tunnels: string[];
   interval: string;
