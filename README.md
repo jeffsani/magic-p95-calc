@@ -1,5 +1,7 @@
 # Magic P95 Bandwidth Calculator
 
+![Magic P95 Bandwidth Calculator](src/p95.png)
+
 A self-service Cloudflare Workers dashboard for Magic Transit customers to visualize ingress/egress bandwidth across all GRE/IPsec tunnels and CNI interconnects, and calculate the **95th percentile (P95)** bandwidth — the standard billing metric for Magic Transit.
 
 The Cloudflare dashboard does not natively display a P95 bandwidth figure. This tool automates the process described in the [Cloudflare P95 bandwidth guide](https://developers.cloudflare.com/magic-transit/analytics/query-bandwidth/): querying 5-minute interval traffic data, aggregating across tunnels, and computing P95.
