@@ -660,7 +660,12 @@ async function testToken() {
     var data = await resp.json();
     if (data.ok) {
       status.style.color = '#10B981';
-      status.textContent = data.message;
+      var msg = data.message;
+      if (data.warnings && data.warnings.length > 0) {
+        status.style.color = '#f59e0b';
+        msg += ' ⚠ ' + data.warnings.join('; ');
+      }
+      status.textContent = msg;
       if (data.tunnelNames && data.tunnelNames.length > 0) {
         populateTunnelFilter(data.tunnelNames);
       }
@@ -668,7 +673,7 @@ async function testToken() {
       status.style.color = '#EF4444';
       status.textContent = data.error;
     }
-    setTimeout(function() { status.textContent = ''; status.style.color = ''; }, 8000);
+    setTimeout(function() { status.textContent = ''; status.style.color = ''; }, 12000);
   } catch(e) {
     status.style.color = '#EF4444';
     status.textContent = 'Error: ' + e.message;

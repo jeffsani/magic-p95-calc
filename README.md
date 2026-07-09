@@ -150,22 +150,25 @@ npm run deploy
 
 ### Step 7: Add accounts and API tokens
 
-Each user creates their own API token at https://dash.cloudflare.com/profile/api-tokens:
+Each user creates their own **account-level** API token at https://dash.cloudflare.com/profile/api-tokens:
 
 1. Click **Create Token**
 2. Use the **Custom Token** template
 3. Add permission: **Account** → **Account Analytics** → **Read**
-4. Scope it to the account(s) you want to query
+4. Under **Account Resources**, select the specific account(s) the token should access — this is an account-scoped token, not a zone-scoped token
 5. Copy the token
+
+> **Important:** The token must be an **account-level** token with **Account Analytics: Read** permission. Zone-level permissions or other scopes (e.g. DNS, Firewall) are not sufficient. The token must also be scoped to the specific Cloudflare account(s) you intend to query — a token scoped to a different account will return permission errors.
 
 Then in the dashboard, click the ⚙️ gear icon to open Settings:
 
 1. Click **+ Add Account**
 2. Enter a **Label** (friendly name), **Account Tag** (hex string from the dashboard URL), and **API Token**
-3. Click **Save** — the tool will test the token and discover available tunnels
-4. Repeat for additional accounts
-5. Click **Set Default** on the account you want auto-selected on page load
-6. Select the active account from the dropdown in the header
+3. Click **Test Connection** to verify the token is active, has the correct permissions, and is scoped to the right account
+4. Click **Save** — the tool will discover available tunnels
+5. Repeat for additional accounts
+6. Click **Set Default** on the account you want auto-selected on page load
+7. Select the active account from the dropdown in the header
 
 ## Local Development
 
