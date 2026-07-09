@@ -85,6 +85,9 @@ export function renderDashboard(userEmail: string): string {
         </div>
       </div>
       <div class="flex items-center gap-3">
+        <button onclick="toggleAbout()" class="text-xs text-cf-gray hover:text-cf-orange flex items-center gap-1 no-print" title="About">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </button>
         <button onclick="toggleSettings()" class="text-xs text-cf-gray hover:text-cf-orange flex items-center gap-1 no-print" title="Settings">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
@@ -170,10 +173,10 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Source / Destination CIDR -->
         <div>
-          <label class="block text-xs font-medium text-cf-gray mb-1">Source CIDR</label>
-          <input type="text" id="filter-source-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white mb-2" placeholder="e.g. 10.0.0.0/8">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Destination CIDR</label>
-          <input type="text" id="filter-dest-cidr" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white" placeholder="e.g. 192.168.1.0/24">
+          <label class="block text-xs font-medium text-cf-gray mb-1">Source CIDR(s)</label>
+          <textarea id="filter-source-cidr" rows="2" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white mb-2 resize-y" placeholder="One per line, e.g.&#10;10.0.0.0/8&#10;172.16.0.0/12"></textarea>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Destination CIDR(s)</label>
+          <textarea id="filter-dest-cidr" rows="2" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white resize-y" placeholder="One per line, e.g.&#10;192.168.1.0/24&#10;10.10.0.0/16"></textarea>
         </div>
 
         <!-- Tunnel / Interconnect Multi-Select -->
@@ -286,11 +289,13 @@ export function renderDashboard(userEmail: string): string {
             <div class="stat-value" id="cidr-p95-ingress" style="color:#f59e0b;font-size:1.1rem">—</div>
             <div class="stat-label">CIDR P95 Ingress</div>
             <div class="text-[10px] text-cf-gray" id="cidr-pct-ingress"></div>
+            <div class="mt-1.5 w-full rounded-full overflow-hidden" style="height:6px;background:var(--card-bg);border:1px solid var(--border-color)"><div id="cidr-bar-ingress" class="h-full rounded-full" style="width:0%;background:#f59e0b;transition:width 0.5s ease"></div></div>
           </div>
           <div class="panel stat-card fade-in dir-egress" style="border-left:3px solid #f59e0b">
             <div class="stat-value" id="cidr-p95-egress" style="color:#f59e0b;font-size:1.1rem">—</div>
             <div class="stat-label">CIDR P95 Egress</div>
             <div class="text-[10px] text-cf-gray" id="cidr-pct-egress"></div>
+            <div class="mt-1.5 w-full rounded-full overflow-hidden" style="height:6px;background:var(--card-bg);border:1px solid var(--border-color)"><div id="cidr-bar-egress" class="h-full rounded-full" style="width:0%;background:#f59e0b;transition:width 0.5s ease"></div></div>
           </div>
           <div class="panel stat-card fade-in dir-ingress">
             <div class="stat-value" id="cidr-peak-ingress" style="color:var(--text-strong);font-size:1rem">—</div>
@@ -334,11 +339,11 @@ export function renderDashboard(userEmail: string): string {
     <div id="data-table-section" class="hidden">
       <div class="panel p-4 fade-in">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-xs font-semibold" style="color:var(--text-strong)">Raw Data</h3>
-          <div class="flex gap-3">
-            <button onclick="exportCsv()" class="text-[11px] text-cf-gray hover:text-cf-orange">Export CSV</button>
-            <button onclick="toggleDataTable()" class="text-[11px] text-cf-gray hover:text-cf-orange">Show/Hide</button>
+          <div class="flex items-center gap-2 cursor-pointer" onclick="toggleDataTable()">
+            <svg id="data-table-chevron" class="w-4 h-4 text-cf-gray transition-transform" style="transform:rotate(-90deg)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <h3 class="text-xs font-semibold" style="color:var(--text-strong)">Raw Data</h3>
           </div>
+          <button onclick="exportCsv()" class="text-[11px] text-cf-gray hover:text-cf-orange">Export CSV</button>
         </div>
         <div id="data-table-body" class="hidden overflow-x-auto">
           <table class="w-full text-xs">
@@ -364,6 +369,57 @@ export function renderDashboard(userEmail: string): string {
     <svg class="mx-auto mb-1 w-24 h-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="#FFF" d="m115.679 69.288l-15.591-8.94l-2.689-1.163l-63.781.436v32.381h82.061z"/><path fill="#F38020" d="M87.295 89.022c.763-2.617.472-5.015-.8-6.796c-1.163-1.635-3.125-2.58-5.488-2.689l-44.737-.581c-.291 0-.545-.145-.691-.363s-.182-.509-.109-.8c.145-.436.581-.763 1.054-.8l45.137-.581c5.342-.254 11.157-4.579 13.192-9.885l2.58-6.723c.109-.291.145-.581.073-.872c-2.906-13.158-14.644-22.97-28.672-22.97c-12.938 0-23.913 8.359-27.838 19.952a13.35 13.35 0 0 0-9.267-2.58c-6.215.618-11.193 5.597-11.811 11.811c-.145 1.599-.036 3.162.327 4.615C10.104 70.051 2 78.337 2 88.549c0 .909.073 1.817.182 2.726a.895.895 0 0 0 .872.763h82.57c.472 0 .909-.327 1.054-.8z"/><path fill="#FAAE40" d="M101.542 60.275c-.4 0-.836 0-1.236.036c-.291 0-.545.218-.654.509l-1.744 6.069c-.763 2.617-.472 5.015.8 6.796c1.163 1.635 3.125 2.58 5.488 2.689l9.522.581c.291 0 .545.145.691.363s.182.545.109.8c-.145.436-.581.763-1.054.8l-9.924.582c-5.379.254-11.157 4.579-13.192 9.885l-.727 1.853c-.145.363.109.727.509.727h34.089c.4 0 .763-.254.872-.654c.581-2.108.909-4.325.909-6.614c0-13.447-10.975-24.422-24.458-24.422"/></svg>
     Cloudflare Internal Tool
   </footer>
+
+  <!-- About Modal -->
+  <div id="about-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center no-print" onclick="if(event.target===this)toggleAbout()">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+    <div class="relative rounded-xl shadow-2xl border border-cf-border max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" style="background:var(--card-bg)">
+      <div class="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-cf-border" style="background:var(--card-bg)">
+        <h2 class="text-sm font-semibold" style="color:var(--text-strong)">About Magic P95 Analytics</h2>
+        <button onclick="toggleAbout()" class="text-cf-gray hover:text-cf-orange">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="px-6 py-5 space-y-5 text-sm" style="color:var(--text-strong)">
+        <section>
+          <h3 class="text-xs font-semibold text-cf-orange uppercase tracking-wider mb-2">How P95 is Calculated</h3>
+          <p class="text-cf-gray leading-relaxed mb-2">P95 means <strong style="color:var(--text-strong)">95% of your 5-minute intervals had bandwidth at or below this value</strong> — only 5% of intervals exceeded it. This is the standard billing metric for Magic Transit.</p>
+          <ol class="text-cf-gray leading-relaxed space-y-1 list-decimal list-inside">
+            <li>Fetches <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">bitRateFiveMinutes</code> (avg bit rate per 5-min bucket) for each tunnel via <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">magicTransitTunnelTrafficAdaptiveGroups</code></li>
+            <li>Filters to selected tunnels (if any)</li>
+            <li>Sums bit rates across all selected tunnels per 5-minute interval to get aggregate bandwidth</li>
+            <li>Removes zero-traffic intervals (these don't count toward billing)</li>
+            <li>Sorts all values ascending and picks the value at index <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">ceil(0.95 &times; N) - 1</code> (nearest-rank method)</li>
+          </ol>
+        </section>
+        <section>
+          <h3 class="text-xs font-semibold text-cf-orange uppercase tracking-wider mb-2">CIDR Subset Analysis</h3>
+          <p class="text-cf-gray leading-relaxed">When source or destination CIDR filters are applied, the <strong style="color:var(--text-strong)">total P95</strong> is always calculated from the tunnel dataset (the billing metric). A supplementary query runs against <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">magicTransitNetworkAnalyticsAdaptiveGroups</code> with the IP filters. The CIDR P95 is displayed alongside the total with progress bars showing the percentage of total. Multiple CIDRs can be entered one per line.</p>
+        </section>
+        <section>
+          <h3 class="text-xs font-semibold text-cf-orange uppercase tracking-wider mb-2">Accuracy &amp; Data Considerations</h3>
+          <dl class="text-cf-gray leading-relaxed space-y-3">
+            <div>
+              <dt class="font-medium" style="color:var(--text-strong)">Adaptive Bit Rate (ABR) Sampling</dt>
+              <dd>The dataset uses Cloudflare's <a href="https://developers.cloudflare.com/analytics/sampling/" target="_blank" class="text-cf-orange hover:underline">ABR sampling</a>, which stores data at multiple resolutions (100%, 10%, 1%) and dynamically selects the best resolution per query. Aggregated metrics like averages and percentiles are extrapolated to represent the full dataset, so sampling does not distort the P95 result.</dd>
+            </div>
+            <div>
+              <dt class="font-medium" style="color:var(--text-strong)">5-Minute Averaging</dt>
+              <dd><code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">bitRateFiveMinutes</code> is the <strong>average</strong> bit rate over each 5-minute window, not an instantaneous or peak measurement. Sub-minute traffic spikes within a bucket are smoothed by this averaging. This is the same granularity used by Cloudflare for Magic Transit billing.</dd>
+            </div>
+            <div>
+              <dt class="font-medium" style="color:var(--text-strong)">Weekly Chunking Reduces Sampling</dt>
+              <dd>By splitting queries into 7-day windows (&le;10,000 rows each), the tool keeps per-query row counts low, which encourages ABR to return higher-resolution (less sampled) data.</dd>
+            </div>
+            <div>
+              <dt class="font-medium" style="color:var(--text-strong)">Billing Methodology Alignment</dt>
+              <dd>This tool follows the <a href="https://developers.cloudflare.com/magic-transit/analytics/query-bandwidth/" target="_blank" class="text-cf-orange hover:underline">official Cloudflare P95 bandwidth guide</a>, using the same dataset, granularity, and calculation method.</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+    </div>
+  </div>
 
 <script>
 // ============================================================
@@ -406,6 +462,10 @@ function updateChartTheme() {
 // ============================================================
 var savedAccounts = [];
 var activeAccountTag = '';
+
+function toggleAbout() {
+  document.getElementById('about-modal').classList.toggle('hidden');
+}
 
 function toggleSettings() {
   var panel = document.getElementById('settings-panel');
@@ -740,8 +800,8 @@ async function runQuery() {
       start: range.start,
       end: range.end,
       direction: selectedDirection,
-      sourceCidr: document.getElementById('filter-source-cidr').value || undefined,
-      destCidr: document.getElementById('filter-dest-cidr').value || undefined,
+      sourceCidr: parseCidrList(document.getElementById('filter-source-cidr').value) || undefined,
+      destCidr: parseCidrList(document.getElementById('filter-dest-cidr').value) || undefined,
       tunnelNames: selectedTunnels.length > 0 && selectedTunnels.length < allTunnelNames.length ? selectedTunnels : undefined,
       accountTag: acctTag,
     };
@@ -770,6 +830,15 @@ async function runQuery() {
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Run Query';
   }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function parseCidrList(val) {
+  if (!val) return '';
+  var items = val.split(/[\\n,]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+  return items.join(',');
 }
 
 // ============================================================
@@ -803,6 +872,7 @@ function renderResults(data) {
   if (data.cidr) {
     document.getElementById('cidr-summary').classList.remove('hidden');
     document.getElementById('cidr-filter-label').textContent = data.cidr.filter;
+    document.getElementById('cidr-filter-label').style.color = '';
     document.getElementById('cidr-p95-ingress').textContent = formatBps(data.cidr.ingress.p95);
     document.getElementById('cidr-p95-egress').textContent = formatBps(data.cidr.egress.p95);
     document.getElementById('cidr-peak-ingress').textContent = formatBps(data.cidr.ingress.peakBps);
@@ -811,8 +881,23 @@ function renderResults(data) {
     var pctEg = data.egress.p95 > 0 ? ((data.cidr.egress.p95 / data.egress.p95) * 100).toFixed(1) : '0.0';
     document.getElementById('cidr-pct-ingress').textContent = pctIn + '% of total P95';
     document.getElementById('cidr-pct-egress').textContent = pctEg + '% of total P95';
+    document.getElementById('cidr-bar-ingress').style.width = Math.min(parseFloat(pctIn), 100) + '%';
+    document.getElementById('cidr-bar-egress').style.width = Math.min(parseFloat(pctEg), 100) + '%';
+  } else if (data.cidrError) {
+    document.getElementById('cidr-summary').classList.remove('hidden');
+    document.getElementById('cidr-filter-label').textContent = data.cidrError;
+    document.getElementById('cidr-filter-label').style.color = '#ef4444';
+    document.getElementById('cidr-p95-ingress').textContent = '—';
+    document.getElementById('cidr-p95-egress').textContent = '—';
+    document.getElementById('cidr-peak-ingress').textContent = '—';
+    document.getElementById('cidr-peak-egress').textContent = '—';
+    document.getElementById('cidr-pct-ingress').textContent = '';
+    document.getElementById('cidr-pct-egress').textContent = '';
+    document.getElementById('cidr-bar-ingress').style.width = '0%';
+    document.getElementById('cidr-bar-egress').style.width = '0%';
   } else {
     document.getElementById('cidr-summary').classList.add('hidden');
+    document.getElementById('cidr-filter-label').style.color = '';
   }
 
   // Update interval labels
@@ -832,12 +917,14 @@ function renderResults(data) {
 
   // Charts
   document.getElementById('charts-section').classList.remove('hidden');
+  var cidrInSeries = data.cidr ? data.cidr.ingress.series : null;
+  var cidrEgSeries = data.cidr ? data.cidr.egress.series : null;
   if (selectedDirection !== 'egress') {
-    renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate', data.ingress.tunnelSeries);
+    renderTimeSeriesChart('chart-ingress-ts', 'ingressTs', data.ingress.series, '#22c55e', 'Ingress bit rate', data.ingress.tunnelSeries, cidrInSeries);
     renderPercentileChart('chart-ingress-pct', 'ingressPct', data.ingress.percentiles, data.ingress.p95, '#22c55e');
   }
   if (selectedDirection !== 'ingress') {
-    renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate', data.egress.tunnelSeries);
+    renderTimeSeriesChart('chart-egress-ts', 'egressTs', data.egress.series, '#3b82f6', 'Egress bit rate', data.egress.tunnelSeries, cidrEgSeries);
     renderPercentileChart('chart-egress-pct', 'egressPct', data.egress.percentiles, data.egress.p95, '#3b82f6');
   }
 
@@ -852,7 +939,7 @@ var tunnelColors = [
   '#0ea5e9', '#84cc16', '#f59e0b', '#6366f1', '#e11d48',
 ];
 
-function renderTimeSeriesChart(canvasId, chartKey, series, color, label, tunnelSeries) {
+function renderTimeSeriesChart(canvasId, chartKey, series, color, label, tunnelSeries, cidrSeries) {
   var ctx = document.getElementById(canvasId).getContext('2d');
   if (charts[chartKey]) charts[chartKey].destroy();
 
@@ -894,6 +981,27 @@ function renderTimeSeriesChart(canvasId, chartKey, series, color, label, tunnelS
         order: 1,
         borderDash: [4, 2],
       });
+    });
+  }
+
+  // Add CIDR subset overlay
+  if (cidrSeries && cidrSeries.length > 0) {
+    var cidrData = new Array(labels.length).fill(null);
+    cidrSeries.forEach(function(p) {
+      var i = timeIndex[p.time];
+      if (i !== undefined) cidrData[i] = (cidrData[i] || 0) + p.bitRate;
+    });
+    datasets.splice(1, 0, {
+      label: 'CIDR subset',
+      data: cidrData,
+      borderColor: '#f59e0b',
+      backgroundColor: '#f59e0b33',
+      fill: true,
+      tension: 0.2,
+      pointRadius: 0,
+      borderWidth: 1.5,
+      order: 0,
+      borderDash: [],
     });
   }
 
@@ -996,7 +1104,10 @@ function renderDataTable(data) {
 }
 
 function toggleDataTable() {
-  document.getElementById('data-table-body').classList.toggle('hidden');
+  var body = document.getElementById('data-table-body');
+  var chevron = document.getElementById('data-table-chevron');
+  body.classList.toggle('hidden');
+  chevron.style.transform = body.classList.contains('hidden') ? 'rotate(-90deg)' : '';
 }
 
 var lastQueryData = null;

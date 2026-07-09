@@ -49,6 +49,7 @@ export interface BandwidthResult {
     egress: DirectionStats;
     filter: string;
   };
+  cidrError?: string;
   tunnels: string[];
   interval: string;
   chunks: number;

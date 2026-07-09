@@ -29,7 +29,7 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 ### Query & Filtering
 - **Direction filter** — ingress, egress, or both; charts and summary cards hide/show dynamically
 - **Multi-select tunnel filter** — select individual tunnels or "Select All"; tunnels auto-discovered on page load
-- **CIDR filtering** — filter by source and/or destination IP prefix for subset analysis
+- **CIDR filtering** — filter by one or more source and/or destination IP prefixes (one per line) for subset analysis
 - **Time range presets** — 1h, 6h, 24h, 2d, 7d, 14d, 30d, or custom date range (clamped to 16-week data retention)
 - **Collapsible filter panel** — collapse the query filters to focus on the data view
 

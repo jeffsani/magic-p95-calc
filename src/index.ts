@@ -303,13 +303,15 @@ app.post('/api/query', async (c) => {
 
     const cidrRaw = await queryBandwidth(cidrParams);
 
-    if (!cidrRaw.error) {
+    const filterDesc = [body.sourceCidr ? 'src: ' + body.sourceCidr : '', body.destCidr ? 'dst: ' + body.destCidr : ''].filter(Boolean).join(', ');
+
+    if (cidrRaw.error) {
+      result.cidrError = `CIDR subset query failed: ${cidrRaw.error}`;
+    } else {
       const cidrIngressAgg = aggregateByTime(cidrRaw.ingress);
       const cidrEgressAgg = aggregateByTime(cidrRaw.egress);
       const cidrIngressP95 = calculateP95(cidrIngressAgg);
       const cidrEgressP95 = calculateP95(cidrEgressAgg);
-
-      const filterDesc = [body.sourceCidr ? 'src: ' + body.sourceCidr : '', body.destCidr ? 'dst: ' + body.destCidr : ''].filter(Boolean).join(', ');
 
       result.cidr = {
         ingress: {
