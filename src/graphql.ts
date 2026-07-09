@@ -217,17 +217,17 @@ function buildNetworkAnalyticsChunkQuery(
   if (sourceCidr) {
     const parts = sourceCidr.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length === 1) {
-      extraFilters.push(`sourceIp: "${parts[0]}"`);
+      extraFilters.push(`ipSourceSubnet: "${parts[0]}"`);
     } else {
-      extraFilters.push(`sourceIp_in: [${parts.map(p => `"${p}"`).join(', ')}]`);
+      extraFilters.push(`ipSourceSubnet_in: [${parts.map(p => `"${p}"`).join(', ')}]`);
     }
   }
   if (destCidr) {
     const parts = destCidr.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length === 1) {
-      extraFilters.push(`destIp: "${parts[0]}"`);
+      extraFilters.push(`ipDestinationSubnet: "${parts[0]}"`);
     } else {
-      extraFilters.push(`destIp_in: [${parts.map(p => `"${p}"`).join(', ')}]`);
+      extraFilters.push(`ipDestinationSubnet_in: [${parts.map(p => `"${p}"`).join(', ')}]`);
     }
   }
   const extraStr = extraFilters.length ? ', ' + extraFilters.join(', ') : '';
