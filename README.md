@@ -63,6 +63,13 @@ When source or destination CIDR filters are applied:
 - A **supplementary query** runs against `magicTransitNetworkAnalyticsAdaptiveGroups` with the IP filters
 - The CIDR P95 is displayed alongside the total, with the **percentage of total** (e.g., "src: 10.0.0.0/8 — P95: 120 Mbps, 24% of total")
 
+### Accuracy & Data Considerations
+
+- **Adaptive Bit Rate (ABR) sampling** — The `magicTransitTunnelTrafficAdaptiveGroups` dataset uses Cloudflare's [ABR sampling](https://developers.cloudflare.com/analytics/sampling/), which stores data at multiple resolutions (100%, 10%, 1%) and dynamically selects the best resolution per query. Aggregated metrics like averages and percentiles are extrapolated to represent the full dataset, so sampling does not distort the P95 result.
+- **5-minute averaging** — `bitRateFiveMinutes` is the **average** bit rate over each 5-minute window, not an instantaneous or peak measurement. Sub-minute traffic spikes within a bucket are smoothed by this averaging. This is the same granularity used by Cloudflare for Magic Transit billing.
+- **Weekly chunking reduces sampling** — By splitting queries into 7-day windows (≤10,000 rows each), the tool keeps per-query row counts low, which encourages ABR to return higher-resolution (less sampled) data.
+- **Billing methodology alignment** — This tool follows the [official Cloudflare P95 bandwidth guide](https://developers.cloudflare.com/magic-transit/analytics/query-bandwidth/), using the same dataset, granularity, and calculation method.
+
 ## Setup From Scratch
 
 ### Prerequisites
