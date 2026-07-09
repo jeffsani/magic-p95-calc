@@ -720,8 +720,17 @@ async function runQuery() {
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Querying...';
-  statusEl.textContent = 'Fetching data from Cloudflare GraphQL API...';
   statusEl.classList.remove('hidden');
+
+  // Estimate query scope for progress message
+  var WEEK_MS = 7 * 24 * 3600000;
+  var rangeMs = new Date(range.end).getTime() - new Date(range.start).getTime();
+  var numChunks = Math.ceil(rangeMs / WEEK_MS);
+  var numDirs = selectedDirection === 'both' ? 2 : 1;
+  var totalQueries = numChunks * numDirs;
+  var hasCidr = !!(document.getElementById('filter-source-cidr').value || document.getElementById('filter-dest-cidr').value);
+  if (hasCidr) totalQueries *= 2; // CIDR subset runs a second set of queries
+  statusEl.textContent = 'Querying ' + numChunks + ' weekly chunk' + (numChunks > 1 ? 's' : '') + ' × ' + numDirs + ' direction' + (numDirs > 1 ? 's' : '') + (hasCidr ? ' + CIDR subset' : '') + ' (' + totalQueries + ' parallel API calls)...';
 
   try {
     var selectedTunnels = getSelectedTunnels();

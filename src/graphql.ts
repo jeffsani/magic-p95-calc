@@ -58,40 +58,53 @@ export async function queryBandwidth(params: BandwidthQuery): Promise<{
   const allEgress: TimeSeriesPoint[] = [];
   const tunnelSet = new Set<string>();
 
+  // Build all chunk+direction tasks up front, then run in parallel
+  const directions: Array<'ingress' | 'egress'> =
+    direction === 'both' ? ['ingress', 'egress'] :
+    [direction as 'ingress' | 'egress'];
+
+  const tasks: Array<{ chunk: typeof chunks[0]; dir: 'ingress' | 'egress'; promise: Promise<{ points: TimeSeriesPoint[]; tunnels: string[]; error?: string }> }> = [];
+
   for (const chunk of chunks) {
-    // Build direction-specific queries for this chunk
-    const directions: Array<'ingress' | 'egress'> =
-      direction === 'both' ? ['ingress', 'egress'] :
-      [direction as 'ingress' | 'egress'];
-
     for (const dir of directions) {
-      const result = await executeChunkQuery({
-        accountTag: params.accountTag,
-        apiToken: params.apiToken,
-        start: chunk.start,
-        end: chunk.end,
-        direction: dir,
-        sourceCidr: params.sourceCidr,
-        destCidr: params.destCidr,
-        useNetworkAnalytics,
+      tasks.push({
+        chunk,
+        dir,
+        promise: executeChunkQuery({
+          accountTag: params.accountTag,
+          apiToken: params.apiToken,
+          start: chunk.start,
+          end: chunk.end,
+          direction: dir,
+          sourceCidr: params.sourceCidr,
+          destCidr: params.destCidr,
+          useNetworkAnalytics,
+        }),
       });
-
-      if (result.error) {
-        return {
-          ingress: allIngress, egress: allEgress,
-          tunnels: Array.from(tunnelSet).sort(),
-          interval: '5min', chunks: chunks.length,
-          error: `Chunk ${chunk.start} → ${chunk.end} [${dir}]: ${result.error}`,
-        };
-      }
-
-      if (dir === 'ingress') {
-        allIngress.push(...result.points);
-      } else {
-        allEgress.push(...result.points);
-      }
-      result.tunnels.forEach(t => tunnelSet.add(t));
     }
+  }
+
+  const results = await Promise.all(tasks.map(t => t.promise));
+
+  for (let i = 0; i < tasks.length; i++) {
+    const result = results[i];
+    const task = tasks[i];
+
+    if (result.error) {
+      return {
+        ingress: allIngress, egress: allEgress,
+        tunnels: Array.from(tunnelSet).sort(),
+        interval: '5min', chunks: chunks.length,
+        error: `Chunk ${task.chunk.start} → ${task.chunk.end} [${task.dir}]: ${result.error}`,
+      };
+    }
+
+    if (task.dir === 'ingress') {
+      allIngress.push(...result.points);
+    } else {
+      allEgress.push(...result.points);
+    }
+    result.tunnels.forEach(t => tunnelSet.add(t));
   }
 
   return {

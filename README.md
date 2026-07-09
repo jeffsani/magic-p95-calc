@@ -9,31 +9,59 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 ## What It Does
 
 1. **Queries the Cloudflare GraphQL Analytics API** at 5-minute granularity for maximum P95 accuracy
-2. **Automatically chunks month-long queries** into weekly windows to stay within the 10,000 row API limit
+2. **Automatically chunks queries** into weekly windows and runs them **in parallel** to stay within the 10,000 row API limit while minimizing latency
 3. **Sums bandwidth across all GRE/IPsec tunnels and CNI interconnects** per 5-minute interval, then computes the 95th percentile
-4. **Renders an interactive dashboard** with time-series charts, percentile distributions, and summary cards
+4. **Renders an interactive dashboard** with per-tunnel time-series charts, percentile distributions, and summary cards
 
 ## Features
 
-- **P95 calculation**: Accurate 95th percentile using the nearest-rank method across 5-minute intervals
-- **4-panel chart dashboard**: Ingress/egress time-series + percentile distribution bar charts
-- **Tunnel/interconnect filter**: Query all tunnels or filter to a specific CNI connection
-- **Direction filter**: Ingress, egress, or both
-- **CIDR filtering**: Filter by source or destination IP prefix
-- **Time range presets**: 1h, 6h, 24h, 2d, 7d, 14d, 30d, or custom date range
-- **Multi-user**: Each user stores their own account tag and API token (persisted in D1)
-- **Token validation**: Test Connection button verifies API permissions and discovers available tunnels
+### P95 Calculation
+- **Accurate 95th percentile** using the nearest-rank method on aggregated 5-minute interval bit rates
+- **Per-tunnel breakdown** — individual tunnel lines plotted alongside the aggregate on time-series charts
+- **CIDR subset analysis** — when source/destination CIDR filters are set, a second query runs against the Network Analytics dataset and the result is shown as a percentage of the total P95 (e.g., "24.3% of total P95")
+
+### Multi-Account Management
+- **Store multiple Cloudflare accounts** per user with labels, account tags, and API tokens
+- **Set a default account** that auto-selects on page load
+- **Interactive account switcher** — dropdown in the header with tunnel auto-discovery on switch
+- **Active account bar** — always-visible indicator showing the selected account name and tag
+
+### Query & Filtering
+- **Direction filter** — ingress, egress, or both; charts and summary cards hide/show dynamically
+- **Multi-select tunnel filter** — select individual tunnels or "Select All"; tunnels auto-discovered on page load
+- **CIDR filtering** — filter by source and/or destination IP prefix for subset analysis
+- **Time range presets** — 1h, 6h, 24h, 2d, 7d, 14d, 30d, or custom date range (clamped to 16-week data retention)
+- **Collapsible filter panel** — collapse the query filters to focus on the data view
+
+### Data & Export
+- **4-panel chart dashboard** — ingress/egress time-series (with per-tunnel lines and legend) + percentile distribution bar charts
+- **Raw data table** — sortable time-series data points
+- **CSV export** — download all data including P95 values, CIDR subset breakdown, and per-direction statistics
+- **Parallel query execution** — all weekly chunks and directions execute concurrently for fast results on long time ranges
+
+### Infrastructure
+- **Multi-user with D1 persistence** — per-user account settings and query history stored in Cloudflare D1
+- **Token validation** — Test Connection verifies API permissions and discovers available tunnels
+- **Cloudflare Access authentication** — protected behind Zero Trust with JWT validation
 - **Dark/light theme** with Cloudflare branding
-- **Weekly chunking**: Automatically splits large queries into weekly API calls, merges results client-side
+- **Weekly chunking** — automatically splits time ranges into weekly API calls, runs them in parallel, merges results
 
 ## How P95 Works
 
 P95 means **95% of your 5-minute intervals had bandwidth at or below this value** — only 5% of intervals exceeded it. This is the standard billing metric for Magic Transit.
 
-The tool:
-1. Fetches `bitRateFiveMinutes` (avg bit rate per 5-min bucket) for each tunnel
-2. Sums across all tunnels per interval to get aggregate bandwidth
-3. Sorts all values and takes the value at the 95th percentile index
+The calculation:
+1. Fetches `bitRateFiveMinutes` (avg bit rate per 5-min bucket) for each tunnel via `magicTransitTunnelTrafficAdaptiveGroups`
+2. Filters to selected tunnels (if any)
+3. Sums bit rates across all selected tunnels per 5-minute interval to get aggregate bandwidth
+4. Removes zero-traffic intervals (these don't count toward billing)
+5. Sorts all values ascending and picks the value at index `ceil(0.95 × N) - 1` (nearest-rank method)
+
+### CIDR Subset Analysis
+When source or destination CIDR filters are applied:
+- The **total P95** is always calculated from the tunnel dataset (the billing metric)
+- A **supplementary query** runs against `magicTransitNetworkAnalyticsAdaptiveGroups` with the IP filters
+- The CIDR P95 is displayed alongside the total, with the **percentage of total** (e.g., "src: 10.0.0.0/8 — P95: 120 Mbps, 24% of total")
 
 ## Setup From Scratch
 
@@ -113,9 +141,9 @@ CF_ACCESS_TEAM_DOMAIN = "your-team-name"   # from <your-team-name>.cloudflareacc
 npm run deploy
 ```
 
-### Step 7: Create an API token
+### Step 7: Add accounts and API tokens
 
-Each user creates their own token at https://dash.cloudflare.com/profile/api-tokens:
+Each user creates their own API token at https://dash.cloudflare.com/profile/api-tokens:
 
 1. Click **Create Token**
 2. Use the **Custom Token** template
@@ -123,11 +151,14 @@ Each user creates their own token at https://dash.cloudflare.com/profile/api-tok
 4. Scope it to the account(s) you want to query
 5. Copy the token
 
-Then in the dashboard, click the ⚙️ gear icon and enter:
-- **Account Tag**: The hex string for your account (visible in the dashboard URL, e.g., `7a0c39354edd897a1a98f6c7e50c6873`)
-- **API Token**: The token you just created
-- Click **Test Connection** to verify permissions and discover tunnels
-- Click **Save Settings**
+Then in the dashboard, click the ⚙️ gear icon to open Settings:
+
+1. Click **+ Add Account**
+2. Enter a **Label** (friendly name), **Account Tag** (hex string from the dashboard URL), and **API Token**
+3. Click **Save** — the tool will test the token and discover available tunnels
+4. Repeat for additional accounts
+5. Click **Set Default** on the account you want auto-selected on page load
+6. Select the active account from the dropdown in the header
 
 ## Local Development
 
@@ -169,14 +200,16 @@ The dashboard will be available at `http://localhost:8787` without authenticatio
 
 ```
 src/
-├── index.ts      # Hono app — API routes, middleware, dashboard serving
+├── index.ts      # Hono app — API routes (settings, query, test-token), middleware
 ├── auth.ts       # Cloudflare Access JWT authentication middleware
-├── graphql.ts    # GraphQL query builder with weekly chunking
+├── graphql.ts    # GraphQL query builder with parallel weekly chunking
 ├── p95.ts        # 95th percentile calculation (nearest-rank method)
-├── types.ts      # TypeScript interfaces
-└── ui.ts         # Single-page dashboard HTML (Tailwind + Chart.js)
-schema.sql        # D1 database schema
-wrangler.toml     # Worker configuration
+├── types.ts      # TypeScript interfaces (BandwidthQuery, BandwidthResult, etc.)
+├── ui.ts         # Single-page dashboard HTML (Tailwind + Chart.js)
+└── p95.png       # Header graphic
+schema.sql                # D1 database schema
+migrate-multi-account.sql # Migration for multi-account + default account support
+wrangler.toml             # Worker configuration
 ```
 
 ## Author
