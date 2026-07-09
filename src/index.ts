@@ -128,61 +128,102 @@ app.post('/api/test-token', async (c) => {
   if (!accountTag) return c.json({ ok: false, error: 'Account tag is required.' }, 400);
   if (!apiToken) return c.json({ ok: false, error: 'API token is required.' }, 400);
 
-  // Test by querying the GraphQL API directly — this validates the token has
-  // the right permissions and is scoped to the correct account in one step.
-  const query = `query TestToken($accountTag: string!) {
-    viewer {
-      accounts(filter: { accountTag: $accountTag }) {
-        magicTransitTunnelTrafficAdaptiveGroups(
-          limit: 10000
-          filter: { datetime_geq: "${new Date(Date.now() - 86_400_000).toISOString()}", datetime_lt: "${new Date().toISOString()}" }
-        ) {
-          dimensions { tunnelName }
+  const headers = { 'Authorization': `Bearer ${apiToken}`, 'Content-Type': 'application/json' };
+  const checks: { label: string; pass: boolean; detail: string }[] = [];
+  let tunnelNames: string[] = [];
+  let allPassed = true;
+
+  // Check 1: Token Valid — account tokens can't be verified via /user/tokens/verify,
+  // so we note that and validate via the API calls below.
+  checks.push({ label: 'Token Valid', pass: true, detail: 'Skipped (account token) — will validate via API calls below' });
+
+  // Check 2: Account Analytics — query tunnel data via GraphQL
+  try {
+    const query = `query TestToken($accountTag: string!) {
+      viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+          magicTransitTunnelTrafficAdaptiveGroups(
+            limit: 10000
+            filter: { datetime_geq: "${new Date(Date.now() - 86_400_000).toISOString()}", datetime_lt: "${new Date().toISOString()}" }
+          ) {
+            dimensions { tunnelName }
+          }
+        }
+      }
+    }`;
+    const resp = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST', headers,
+      body: JSON.stringify({ query, variables: { accountTag } }),
+    });
+    if (resp.status === 401 || resp.status === 403) {
+      checks.push({ label: 'Account Analytics', pass: false, detail: 'Authentication failed — token invalid or missing "Account Analytics: Read"' });
+      allPassed = false;
+    } else {
+      const data = await resp.json() as any;
+      if (data.errors?.length) {
+        checks.push({ label: 'Account Analytics', pass: false, detail: data.errors.map((e: any) => e.message).join('; ') });
+        allPassed = false;
+      } else {
+        const accounts = data?.data?.viewer?.accounts;
+        if (!accounts || accounts.length === 0) {
+          checks.push({ label: 'Account Analytics', pass: false, detail: `No data — check Account Tag and token scope` });
+          allPassed = false;
+        } else {
+          const rows = accounts[0]?.magicTransitTunnelTrafficAdaptiveGroups || [];
+          tunnelNames = [...new Set(rows.map((t: any) => t.dimensions?.tunnelName).filter(Boolean))].sort() as string[];
+          checks.push({ label: 'Account Analytics', pass: true, detail: `${tunnelNames.length} tunnel(s) found` });
         }
       }
     }
-  }`;
-
-  try {
-    const resp = await fetch('https://api.cloudflare.com/client/v4/graphql', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query, variables: { accountTag } }),
-    });
-
-    if (resp.status === 401 || resp.status === 403) {
-      return c.json({ ok: false, error: 'Authentication failed — check that the API token is valid and has "Account Analytics: Read" permission scoped to this account.' });
-    }
-
-    const data = await resp.json() as any;
-
-    if (data.errors?.length) {
-      const errMsg = data.errors.map((e: any) => e.message).join('; ');
-      if (errMsg.includes('account') || errMsg.includes('permission') || errMsg.includes('authorization')) {
-        return c.json({ ok: false, error: `Permission denied — ensure the token has "Account → Account Analytics → Read" and is scoped to account ${accountTag}.` });
-      }
-      return c.json({ ok: false, error: `GraphQL error: ${errMsg}` });
-    }
-
-    const accounts = data?.data?.viewer?.accounts;
-    if (!accounts || accounts.length === 0) {
-      return c.json({ ok: false, error: `No data for account ${accountTag} — check the Account Tag and that the token is scoped to this account.` });
-    }
-
-    const rows = accounts[0]?.magicTransitTunnelTrafficAdaptiveGroups || [];
-    const tunnelNames = [...new Set(rows.map((t: any) => t.dimensions?.tunnelName).filter(Boolean))].sort() as string[];
-
-    return c.json({
-      ok: true,
-      message: `✓ Token valid · Account Analytics accessible · ${tunnelNames.length} tunnel(s) found`,
-      tunnelNames,
-    });
   } catch (err: any) {
-    return c.json({ ok: false, error: `Network error: ${err.message}` }, 502);
+    checks.push({ label: 'Account Analytics', pass: false, detail: `Network error: ${err.message}` });
+    allPassed = false;
   }
+
+  // Check 3: Account Rulesets
+  try {
+    const resp = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountTag}/rulesets`, { headers });
+    const data = await resp.json() as any;
+    if (data.success) {
+      const count = data.result?.length || 0;
+      checks.push({ label: 'Account Rulesets', pass: true, detail: `${count} ruleset(s) found` });
+    } else {
+      const msg = data.errors?.map((e: any) => e.message).join('; ') || 'Access denied';
+      checks.push({ label: 'Account Rulesets', pass: false, detail: msg });
+      allPassed = false;
+    }
+  } catch (err: any) {
+    checks.push({ label: 'Account Rulesets', pass: false, detail: `Network error: ${err.message}` });
+    allPassed = false;
+  }
+
+  // Check 4: Magic Firewall
+  try {
+    const resp = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountTag}/rulesets?kind=root&phase=magic_transit`, { headers });
+    const data = await resp.json() as any;
+    if (data.success && data.result?.length > 0) {
+      const ruleCount = data.result[0]?.rules?.length || 0;
+      checks.push({ label: 'Magic Firewall', pass: true, detail: `Ruleset found with ${ruleCount} rule(s)` });
+    } else if (data.success) {
+      checks.push({ label: 'Magic Firewall', pass: true, detail: 'No Magic Firewall ruleset configured' });
+    } else {
+      const msg = data.errors?.map((e: any) => e.message).join('; ') || 'Access denied';
+      checks.push({ label: 'Magic Firewall', pass: false, detail: msg });
+      allPassed = false;
+    }
+  } catch (err: any) {
+    checks.push({ label: 'Magic Firewall', pass: false, detail: `Network error: ${err.message}` });
+    allPassed = false;
+  }
+
+  return c.json({
+    ok: allPassed,
+    checks,
+    summary: allPassed
+      ? 'All checks passed — token has the required permissions.'
+      : 'Some checks failed — review the results above.',
+    tunnelNames,
+  });
 });
 
 // ─── Query Bandwidth ───

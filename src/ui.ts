@@ -135,6 +135,7 @@ export function renderDashboard(userEmail: string): string {
           <button onclick="hideAccountForm()" class="px-4 py-1.5 text-xs text-cf-gray hover:text-white">Cancel</button>
           <span id="settings-status" class="text-xs text-cf-gray self-center"></span>
         </div>
+        <div id="token-check-results" class="hidden mt-3 rounded-lg border border-cf-border p-4 text-sm" style="background:var(--surface)"></div>
       </div>
 
       <!-- Active account selector (shown in filter area) -->
@@ -646,8 +647,11 @@ async function saveAccount() {
 
 async function testToken() {
   var status = document.getElementById('settings-status');
+  var resultsDiv = document.getElementById('token-check-results');
   status.textContent = 'Testing...';
   status.style.color = 'var(--text-muted)';
+  resultsDiv.classList.add('hidden');
+  resultsDiv.innerHTML = '';
   try {
     var resp = await fetch('/api/test-token', {
       method: 'POST',
@@ -658,17 +662,26 @@ async function testToken() {
       }),
     });
     var data = await resp.json();
-    if (data.ok) {
-      status.style.color = '#10B981';
-      status.textContent = data.message;
+    status.textContent = '';
+    if (data.checks) {
+      var html = '<div class="font-semibold mb-2" style="color:var(--text-strong)">Permission Check Results</div>';
+      data.checks.forEach(function(chk) {
+        var icon = chk.pass ? '<span style="color:#10B981">✓</span>' : '<span style="color:#EF4444">✗</span>';
+        var detailColor = chk.pass ? 'color:#6B7280' : 'color:#EF4444';
+        html += '<div class="py-1">' + icon + ' <strong style="color:var(--text-strong)">' + chk.label + '</strong> <span style="' + detailColor + '">' + chk.detail + '</span></div>';
+      });
+      var summaryColor = data.ok ? '#10B981' : '#EF4444';
+      html += '<div class="mt-2 font-medium" style="color:' + summaryColor + '">' + data.summary + '</div>';
+      resultsDiv.innerHTML = html;
+      resultsDiv.classList.remove('hidden');
       if (data.tunnelNames && data.tunnelNames.length > 0) {
         populateTunnelFilter(data.tunnelNames);
       }
-    } else {
+    } else if (data.error) {
       status.style.color = '#EF4444';
       status.textContent = data.error;
+      setTimeout(function() { status.textContent = ''; status.style.color = ''; }, 8000);
     }
-    setTimeout(function() { status.textContent = ''; status.style.color = ''; }, 12000);
   } catch(e) {
     status.style.color = '#EF4444';
     status.textContent = 'Error: ' + e.message;
