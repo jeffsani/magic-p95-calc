@@ -373,8 +373,8 @@ export function renderDashboard(userEmail: string): string {
   <!-- About Modal -->
   <div id="about-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center no-print" onclick="if(event.target===this)toggleAbout()">
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
-    <div class="relative rounded-xl shadow-2xl border border-cf-border max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" style="background:var(--card-bg)">
-      <div class="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-cf-border" style="background:var(--card-bg)">
+    <div class="relative rounded-xl shadow-2xl border border-cf-border max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" style="background:var(--surface)">
+      <div class="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-cf-border" style="background:var(--surface)">
         <h2 class="text-sm font-semibold" style="color:var(--text-strong)">About Magic P95 Analytics</h2>
         <button onclick="toggleAbout()" class="text-cf-gray hover:text-cf-orange">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -385,16 +385,16 @@ export function renderDashboard(userEmail: string): string {
           <h3 class="text-xs font-semibold text-cf-orange uppercase tracking-wider mb-2">How P95 is Calculated</h3>
           <p class="text-cf-gray leading-relaxed mb-2">P95 means <strong style="color:var(--text-strong)">95% of your 5-minute intervals had bandwidth at or below this value</strong> — only 5% of intervals exceeded it. This is the standard billing metric for Magic Transit.</p>
           <ol class="text-cf-gray leading-relaxed space-y-1 list-decimal list-inside">
-            <li>Fetches <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">bitRateFiveMinutes</code> (avg bit rate per 5-min bucket) for each tunnel via <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">magicTransitTunnelTrafficAdaptiveGroups</code></li>
+            <li>Fetches <code class="text-xs px-1 py-0.5 rounded" style="background:var(--page-bg)">bitRateFiveMinutes</code> (avg bit rate per 5-min bucket) for each tunnel via <code class="text-xs px-1 py-0.5 rounded" style="background:var(--page-bg)">magicTransitTunnelTrafficAdaptiveGroups</code></li>
             <li>Filters to selected tunnels (if any)</li>
             <li>Sums bit rates across all selected tunnels per 5-minute interval to get aggregate bandwidth</li>
             <li>Removes zero-traffic intervals (these don't count toward billing)</li>
-            <li>Sorts all values ascending and picks the value at index <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">ceil(0.95 &times; N) - 1</code> (nearest-rank method)</li>
+            <li>Sorts all values ascending and picks the value at index <code class="text-xs px-1 py-0.5 rounded" style="background:var(--page-bg)">ceil(0.95 &times; N) - 1</code> (nearest-rank method)</li>
           </ol>
         </section>
         <section>
           <h3 class="text-xs font-semibold text-cf-orange uppercase tracking-wider mb-2">CIDR Subset Analysis</h3>
-          <p class="text-cf-gray leading-relaxed">When source or destination CIDR filters are applied, the <strong style="color:var(--text-strong)">total P95</strong> is always calculated from the tunnel dataset (the billing metric). A supplementary query runs against <code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">magicTransitNetworkAnalyticsAdaptiveGroups</code> with the IP filters. The CIDR P95 is displayed alongside the total with progress bars showing the percentage of total. Multiple CIDRs can be entered one per line.</p>
+          <p class="text-cf-gray leading-relaxed">When source or destination CIDR filters are applied, the <strong style="color:var(--text-strong)">total P95</strong> is always calculated from the tunnel dataset (the billing metric). A supplementary query runs against <code class="text-xs px-1 py-0.5 rounded" style="background:var(--page-bg)">magicTransitNetworkAnalyticsAdaptiveGroups</code> with the IP filters. The CIDR P95 is displayed alongside the total with progress bars showing the percentage of total. Multiple CIDRs can be entered one per line.</p>
         </section>
         <section>
           <h3 class="text-xs font-semibold text-cf-orange uppercase tracking-wider mb-2">Accuracy &amp; Data Considerations</h3>
@@ -405,7 +405,7 @@ export function renderDashboard(userEmail: string): string {
             </div>
             <div>
               <dt class="font-medium" style="color:var(--text-strong)">5-Minute Averaging</dt>
-              <dd><code class="text-xs px-1 py-0.5 rounded" style="background:var(--bg)">bitRateFiveMinutes</code> is the <strong>average</strong> bit rate over each 5-minute window, not an instantaneous or peak measurement. Sub-minute traffic spikes within a bucket are smoothed by this averaging. This is the same granularity used by Cloudflare for Magic Transit billing.</dd>
+              <dd><code class="text-xs px-1 py-0.5 rounded" style="background:var(--page-bg)">bitRateFiveMinutes</code> is the <strong>average</strong> bit rate over each 5-minute window, not an instantaneous or peak measurement. Sub-minute traffic spikes within a bucket are smoothed by this averaging. This is the same granularity used by Cloudflare for Magic Transit billing.</dd>
             </div>
             <div>
               <dt class="font-medium" style="color:var(--text-strong)">Weekly Chunking Reduces Sampling</dt>
