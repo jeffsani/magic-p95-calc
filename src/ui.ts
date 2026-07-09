@@ -954,7 +954,7 @@ function renderPercentileChart(canvasId, chartKey, percentiles, p95Value, color)
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: getChartTextColor(), font: { size: 10 } } },
+        legend: { display: false },
         tooltip: { callbacks: { label: function(ctx) { return formatBps(ctx.parsed.y); } } }
       },
       scales: {

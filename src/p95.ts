@@ -33,12 +33,16 @@ export function calculateP95(series: TimeSeriesPoint[]): {
 
   // Generate percentile distribution at 5% intervals for the bar chart
   const percentiles: PercentilePoint[] = [];
-  for (let pct = 5; pct <= 100; pct += 5) {
+  for (let pct = 5; pct <= 95; pct += 5) {
     percentiles.push({
       percentile: pct,
       value: percentile(values, pct),
     });
   }
+  percentiles.push({
+    percentile: 99,
+    value: percentile(values, 99),
+  });
 
   return { p95, percentiles, peak, avg };
 }
