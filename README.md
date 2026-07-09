@@ -41,7 +41,7 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 
 ### Infrastructure
 - **Multi-user with D1 persistence** — per-user account settings and query history stored in Cloudflare D1
-- **Token validation** — Test Connection verifies API permissions and discovers available tunnels
+- **Token validation** — Test Token verifies the account-level API token has the correct permissions and discovers available tunnels
 - **Cloudflare Access authentication** — protected behind Zero Trust with JWT validation
 - **Dark/light theme** with Cloudflare branding
 - **Weekly chunking** — automatically splits time ranges into weekly API calls, runs them in parallel, merges results
@@ -164,7 +164,7 @@ Then in the dashboard, click the ⚙️ gear icon to open Settings:
 
 1. Click **+ Add Account**
 2. Enter a **Label** (friendly name), **Account Tag** (hex string from the dashboard URL), and **API Token**
-3. Click **Test Connection** to verify the token is active, has the correct permissions, and is scoped to the right account
+3. Click **Test Token** to verify the token has the correct permissions and is scoped to the right account
 4. Click **Save** — the tool will discover available tunnels
 5. Repeat for additional accounts
 6. Click **Set Default** on the account you want auto-selected on page load

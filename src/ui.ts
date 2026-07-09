@@ -131,7 +131,7 @@ export function renderDashboard(userEmail: string): string {
         </div>
         <div class="flex gap-2 items-center">
           <button onclick="saveAccount()" class="px-4 py-1.5 bg-cf-orange text-black text-xs font-semibold rounded-lg hover:opacity-90">Save Account</button>
-          <button onclick="testToken()" class="px-4 py-1.5 border border-cf-border text-cf-gray text-xs font-semibold rounded-lg hover:border-cf-orange hover:text-cf-orange">Test Connection</button>
+          <button onclick="testToken()" class="px-4 py-1.5 border border-cf-border text-cf-gray text-xs font-semibold rounded-lg hover:border-cf-orange hover:text-cf-orange">Test Token</button>
           <button onclick="hideAccountForm()" class="px-4 py-1.5 text-xs text-cf-gray hover:text-white">Cancel</button>
           <span id="settings-status" class="text-xs text-cf-gray self-center"></span>
         </div>
@@ -660,12 +660,7 @@ async function testToken() {
     var data = await resp.json();
     if (data.ok) {
       status.style.color = '#10B981';
-      var msg = data.message;
-      if (data.warnings && data.warnings.length > 0) {
-        status.style.color = '#f59e0b';
-        msg += ' ⚠ ' + data.warnings.join('; ');
-      }
-      status.textContent = msg;
+      status.textContent = data.message;
       if (data.tunnelNames && data.tunnelNames.length > 0) {
         populateTunnelFilter(data.tunnelNames);
       }

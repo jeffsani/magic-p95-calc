@@ -128,70 +128,22 @@ app.post('/api/test-token', async (c) => {
   if (!accountTag) return c.json({ ok: false, error: 'Account tag is required.' }, 400);
   if (!apiToken) return c.json({ ok: false, error: 'API token is required.' }, 400);
 
+  // Test by querying the GraphQL API directly — this validates the token has
+  // the right permissions and is scoped to the correct account in one step.
+  const query = `query TestToken($accountTag: string!) {
+    viewer {
+      accounts(filter: { accountTag: $accountTag }) {
+        magicTransitTunnelTrafficAdaptiveGroups(
+          limit: 10000
+          filter: { datetime_geq: "${new Date(Date.now() - 86_400_000).toISOString()}", datetime_lt: "${new Date().toISOString()}" }
+        ) {
+          dimensions { tunnelName }
+        }
+      }
+    }
+  }`;
+
   try {
-    // 1. Verify the token is active
-    const verifyResp = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
-      headers: { 'Authorization': `Bearer ${apiToken}` },
-    });
-    const verifyData = await verifyResp.json() as any;
-
-    if (!verifyData.success) {
-      const msg = verifyData.errors?.map((e: any) => e.message).join('; ') || 'Unknown error';
-      return c.json({ ok: false, error: `Token verification failed: ${msg}` });
-    }
-
-    const tokenStatus = verifyData.result?.status;
-    if (tokenStatus !== 'active') {
-      return c.json({ ok: false, error: `Token status is "${tokenStatus}" — it must be active.` });
-    }
-
-    // 2. Get token details including permission scopes
-    const tokenId = verifyData.result?.id;
-    let permissions: string[] = [];
-    let scopeWarnings: string[] = [];
-
-    if (tokenId) {
-      const detailResp = await fetch(`https://api.cloudflare.com/client/v4/user/tokens/${tokenId}`, {
-        headers: { 'Authorization': `Bearer ${apiToken}` },
-      });
-      const detailData = await detailResp.json() as any;
-
-      if (detailData.success && detailData.result?.policies) {
-        const policies = detailData.result.policies;
-        for (const policy of policies) {
-          const resources = Object.keys(policy.resources || {});
-          for (const pg of policy.permission_groups || []) {
-            permissions.push(pg.name || pg.id);
-          }
-          // Check if scoped to all accounts or the specific account
-          const hasAccount = resources.some((r: string) =>
-            r === `com.cloudflare.api.account.${accountTag}` || r === 'com.cloudflare.api.account.*'
-          );
-          if (!hasAccount && resources.length > 0) {
-            scopeWarnings.push(`Token is not scoped to account ${accountTag}.`);
-          }
-        }
-      }
-    }
-
-    const hasAnalyticsRead = permissions.some(p =>
-      p.toLowerCase().includes('analytics') && p.toLowerCase().includes('read')
-    );
-
-    // 3. Query last 24h to discover all unique tunnel names
-    const query = `query TestToken($accountTag: string!) {
-      viewer {
-        accounts(filter: { accountTag: $accountTag }) {
-          magicTransitTunnelTrafficAdaptiveGroups(
-            limit: 10000
-            filter: { datetime_geq: "${new Date(Date.now() - 86_400_000).toISOString()}", datetime_lt: "${new Date().toISOString()}" }
-          ) {
-            dimensions { tunnelName }
-          }
-        }
-      }
-    }`;
-
     const resp = await fetch('https://api.cloudflare.com/client/v4/graphql', {
       method: 'POST',
       headers: {
@@ -202,7 +154,7 @@ app.post('/api/test-token', async (c) => {
     });
 
     if (resp.status === 401 || resp.status === 403) {
-      return c.json({ ok: false, error: 'Authentication failed — check that the API token is valid and has "Account Analytics: Read" permission.' });
+      return c.json({ ok: false, error: 'Authentication failed — check that the API token is valid and has "Account Analytics: Read" permission scoped to this account.' });
     }
 
     const data = await resp.json() as any;
@@ -210,7 +162,7 @@ app.post('/api/test-token', async (c) => {
     if (data.errors?.length) {
       const errMsg = data.errors.map((e: any) => e.message).join('; ');
       if (errMsg.includes('account') || errMsg.includes('permission') || errMsg.includes('authorization')) {
-        return c.json({ ok: false, error: `Permission denied — ensure the token has "Account Analytics: Read" and access to account ${accountTag}.` });
+        return c.json({ ok: false, error: `Permission denied — ensure the token has "Account → Account Analytics → Read" and is scoped to account ${accountTag}.` });
       }
       return c.json({ ok: false, error: `GraphQL error: ${errMsg}` });
     }
@@ -223,22 +175,9 @@ app.post('/api/test-token', async (c) => {
     const rows = accounts[0]?.magicTransitTunnelTrafficAdaptiveGroups || [];
     const tunnelNames = [...new Set(rows.map((t: any) => t.dimensions?.tunnelName).filter(Boolean))].sort() as string[];
 
-    // Build detailed result message
-    const parts: string[] = [];
-    parts.push(`✓ Token active`);
-    if (permissions.length > 0) {
-      parts.push(`Permissions: ${permissions.join(', ')}`);
-    }
-    if (!hasAnalyticsRead && permissions.length > 0) {
-      scopeWarnings.push('Missing "Account Analytics: Read" permission.');
-    }
-    parts.push(`${tunnelNames.length} tunnel(s) found`);
-
     return c.json({
       ok: true,
-      message: parts.join(' · '),
-      warnings: scopeWarnings.length > 0 ? scopeWarnings : undefined,
-      permissions,
+      message: `✓ Token valid · Account Analytics accessible · ${tunnelNames.length} tunnel(s) found`,
       tunnelNames,
     });
   } catch (err: any) {
