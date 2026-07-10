@@ -9,6 +9,11 @@ export interface UserSettings {
   api_token: string;
 }
 
+export interface CidrFilter {
+  include: string[];
+  exclude: string[];
+}
+
 export interface BandwidthQuery {
   accountTag: string;
   apiToken: string;
@@ -17,6 +22,8 @@ export interface BandwidthQuery {
   direction?: 'ingress' | 'egress' | 'both';
   sourceCidr?: string;
   destCidr?: string;
+  sourceCidrFilter?: CidrFilter;
+  destCidrFilter?: CidrFilter;
 }
 
 export interface TimeSeriesPoint {

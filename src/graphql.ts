@@ -1,4 +1,4 @@
-import type { BandwidthQuery, TimeSeriesPoint } from './types';
+import type { BandwidthQuery, CidrFilter, TimeSeriesPoint } from './types';
 
 const CF_GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql';
 
@@ -51,7 +51,8 @@ export async function queryBandwidth(params: BandwidthQuery): Promise<{
   const startMs = new Date(params.start).getTime();
   const endMs = new Date(params.end).getTime();
   const direction = params.direction || 'both';
-  const useNetworkAnalytics = !!(params.sourceCidr || params.destCidr);
+  const hasCidrFilter = !!(params.sourceCidrFilter?.include.length || params.sourceCidrFilter?.exclude.length || params.destCidrFilter?.include.length || params.destCidrFilter?.exclude.length);
+  const useNetworkAnalytics = !!(params.sourceCidr || params.destCidr || hasCidrFilter);
 
   const chunks = buildChunks(startMs, endMs);
   const allIngress: TimeSeriesPoint[] = [];
@@ -78,6 +79,8 @@ export async function queryBandwidth(params: BandwidthQuery): Promise<{
           direction: dir,
           sourceCidr: params.sourceCidr,
           destCidr: params.destCidr,
+          sourceCidrFilter: params.sourceCidrFilter,
+          destCidrFilter: params.destCidrFilter,
           useNetworkAnalytics,
         }),
       });
@@ -127,10 +130,12 @@ async function executeChunkQuery(params: {
   direction: 'ingress' | 'egress';
   sourceCidr?: string;
   destCidr?: string;
+  sourceCidrFilter?: CidrFilter;
+  destCidrFilter?: CidrFilter;
   useNetworkAnalytics: boolean;
 }): Promise<{ points: TimeSeriesPoint[]; tunnels: string[]; error?: string }> {
   const query = params.useNetworkAnalytics
-    ? buildNetworkAnalyticsChunkQuery(params.accountTag, params.direction, params.start, params.end, params.sourceCidr, params.destCidr)
+    ? buildNetworkAnalyticsChunkQuery(params.accountTag, params.direction, params.start, params.end, params.sourceCidr, params.destCidr, params.sourceCidrFilter, params.destCidrFilter)
     : buildTunnelTrafficChunkQuery(params.accountTag, params.direction, params.start, params.end);
 
   const resp = await fetch(CF_GRAPHQL, {
@@ -212,9 +217,24 @@ function buildNetworkAnalyticsChunkQuery(
   end: string,
   sourceCidr?: string,
   destCidr?: string,
+  sourceCidrFilter?: CidrFilter,
+  destCidrFilter?: CidrFilter,
 ): string {
   const extraFilters: string[] = [];
-  if (sourceCidr) {
+
+  // New structured include/exclude filters take priority over legacy comma-separated strings
+  if (sourceCidrFilter) {
+    if (sourceCidrFilter.include.length === 1) {
+      extraFilters.push(`ipSourceSubnet: "${sourceCidrFilter.include[0]}"`);
+    } else if (sourceCidrFilter.include.length > 1) {
+      extraFilters.push(`ipSourceSubnet_in: [${sourceCidrFilter.include.map(p => `"${p}"`).join(', ')}]`);
+    }
+    if (sourceCidrFilter.exclude.length === 1) {
+      extraFilters.push(`ipSourceSubnet_neq: "${sourceCidrFilter.exclude[0]}"`);
+    } else if (sourceCidrFilter.exclude.length > 1) {
+      extraFilters.push(`ipSourceSubnet_notin: [${sourceCidrFilter.exclude.map(p => `"${p}"`).join(', ')}]`);
+    }
+  } else if (sourceCidr) {
     const parts = sourceCidr.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length === 1) {
       extraFilters.push(`ipSourceSubnet: "${parts[0]}"`);
@@ -222,7 +242,19 @@ function buildNetworkAnalyticsChunkQuery(
       extraFilters.push(`ipSourceSubnet_in: [${parts.map(p => `"${p}"`).join(', ')}]`);
     }
   }
-  if (destCidr) {
+
+  if (destCidrFilter) {
+    if (destCidrFilter.include.length === 1) {
+      extraFilters.push(`ipDestinationSubnet: "${destCidrFilter.include[0]}"`);
+    } else if (destCidrFilter.include.length > 1) {
+      extraFilters.push(`ipDestinationSubnet_in: [${destCidrFilter.include.map(p => `"${p}"`).join(', ')}]`);
+    }
+    if (destCidrFilter.exclude.length === 1) {
+      extraFilters.push(`ipDestinationSubnet_neq: "${destCidrFilter.exclude[0]}"`);
+    } else if (destCidrFilter.exclude.length > 1) {
+      extraFilters.push(`ipDestinationSubnet_notin: [${destCidrFilter.exclude.map(p => `"${p}"`).join(', ')}]`);
+    }
+  } else if (destCidr) {
     const parts = destCidr.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length === 1) {
       extraFilters.push(`ipDestinationSubnet: "${parts[0]}"`);
@@ -230,6 +262,7 @@ function buildNetworkAnalyticsChunkQuery(
       extraFilters.push(`ipDestinationSubnet_in: [${parts.map(p => `"${p}"`).join(', ')}]`);
     }
   }
+
   const extraStr = extraFilters.length ? ', ' + extraFilters.join(', ') : '';
 
   return `{

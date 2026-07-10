@@ -235,6 +235,8 @@ app.post('/api/query', async (c) => {
     direction?: 'ingress' | 'egress' | 'both';
     sourceCidr?: string;
     destCidr?: string;
+    sourceCidrFilter?: { include: string[]; exclude: string[] };
+    destCidrFilter?: { include: string[]; exclude: string[] };
     tunnelNames?: string[];
     accountTag?: string;
   }>();
@@ -333,7 +335,11 @@ app.post('/api/query', async (c) => {
   };
 
   // 2. If CIDR filters are set, run a supplementary Network Analytics query
-  if (body.sourceCidr || body.destCidr) {
+  const hasStructuredCidr = !!(
+    (body.sourceCidrFilter?.include?.length || body.sourceCidrFilter?.exclude?.length) ||
+    (body.destCidrFilter?.include?.length || body.destCidrFilter?.exclude?.length)
+  );
+  if (body.sourceCidr || body.destCidr || hasStructuredCidr) {
     const cidrParams: BandwidthQuery = {
       accountTag,
       apiToken,
@@ -342,11 +348,27 @@ app.post('/api/query', async (c) => {
       direction,
       sourceCidr: body.sourceCidr,
       destCidr: body.destCidr,
+      sourceCidrFilter: body.sourceCidrFilter,
+      destCidrFilter: body.destCidrFilter,
     };
 
     const cidrRaw = await queryBandwidth(cidrParams);
 
-    const filterDesc = [body.sourceCidr ? 'src: ' + body.sourceCidr : '', body.destCidr ? 'dst: ' + body.destCidr : ''].filter(Boolean).join(', ');
+    // Build filter description
+    const filterParts: string[] = [];
+    if (body.sourceCidrFilter) {
+      if (body.sourceCidrFilter.include.length) filterParts.push('src+: ' + body.sourceCidrFilter.include.join(', '));
+      if (body.sourceCidrFilter.exclude.length) filterParts.push('src−: ' + body.sourceCidrFilter.exclude.join(', '));
+    } else if (body.sourceCidr) {
+      filterParts.push('src: ' + body.sourceCidr);
+    }
+    if (body.destCidrFilter) {
+      if (body.destCidrFilter.include.length) filterParts.push('dst+: ' + body.destCidrFilter.include.join(', '));
+      if (body.destCidrFilter.exclude.length) filterParts.push('dst−: ' + body.destCidrFilter.exclude.join(', '));
+    } else if (body.destCidr) {
+      filterParts.push('dst: ' + body.destCidr);
+    }
+    const filterDesc = filterParts.join(', ');
 
     if (cidrRaw.error) {
       result.cidrError = `CIDR subset query failed: ${cidrRaw.error}`;

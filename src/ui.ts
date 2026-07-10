@@ -174,10 +174,17 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Source / Destination CIDR -->
         <div>
-          <label class="block text-xs font-medium text-cf-gray mb-1">Source CIDR(s)</label>
-          <textarea id="filter-source-cidr" rows="2" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white mb-2 resize-y" placeholder="One per line, e.g.&#10;10.0.0.0/8&#10;172.16.0.0/12"></textarea>
-          <label class="block text-xs font-medium text-cf-gray mb-1">Destination CIDR(s)</label>
-          <textarea id="filter-dest-cidr" rows="2" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white resize-y" placeholder="One per line, e.g.&#10;192.168.1.0/24&#10;10.10.0.0/16"></textarea>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-medium text-cf-gray">Source CIDR(s)</label>
+            <button type="button" onclick="addCidrRow('source')" class="text-[10px] text-cf-orange hover:underline">+ Add</button>
+          </div>
+          <div id="source-cidr-list" class="space-y-1.5 mb-2"></div>
+
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-medium text-cf-gray">Destination CIDR(s)</label>
+            <button type="button" onclick="addCidrRow('dest')" class="text-[10px] text-cf-orange hover:underline">+ Add</button>
+          </div>
+          <div id="dest-cidr-list" class="space-y-1.5"></div>
         </div>
 
         <!-- Tunnel / Interconnect Multi-Select -->
@@ -489,7 +496,7 @@ async function loadSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_tag: activeAccountTag }),
       }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
+        if (d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
       }).catch(function(){});
     }
   } catch(e) {}
@@ -578,7 +585,7 @@ function onAccountSelected() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ account_tag: activeAccountTag }),
     }).then(function(r) { return r.json(); }).then(function(d) {
-      if (d.ok && d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
+      if (d.tunnelNames && d.tunnelNames.length > 0) populateTunnelFilter(d.tunnelNames);
     }).catch(function(){});
   }
 }
@@ -801,7 +808,9 @@ async function runQuery() {
   var numChunks = Math.ceil(rangeMs / WEEK_MS);
   var numDirs = selectedDirection === 'both' ? 2 : 1;
   var totalQueries = numChunks * numDirs;
-  var hasCidr = !!(document.getElementById('filter-source-cidr').value || document.getElementById('filter-dest-cidr').value);
+  var srcFilter = getCidrFilter('source');
+  var dstFilter = getCidrFilter('dest');
+  var hasCidr = !!(srcFilter || dstFilter);
   if (hasCidr) totalQueries *= 2; // CIDR subset runs a second set of queries
   statusEl.textContent = 'Querying ' + numChunks + ' weekly chunk' + (numChunks > 1 ? 's' : '') + ' × ' + numDirs + ' direction' + (numDirs > 1 ? 's' : '') + (hasCidr ? ' + CIDR subset' : '') + ' (' + totalQueries + ' parallel API calls)...';
 
@@ -813,8 +822,8 @@ async function runQuery() {
       start: range.start,
       end: range.end,
       direction: selectedDirection,
-      sourceCidr: parseCidrList(document.getElementById('filter-source-cidr').value) || undefined,
-      destCidr: parseCidrList(document.getElementById('filter-dest-cidr').value) || undefined,
+      sourceCidrFilter: srcFilter || undefined,
+      destCidrFilter: dstFilter || undefined,
       tunnelNames: selectedTunnels.length > 0 && selectedTunnels.length < allTunnelNames.length ? selectedTunnels : undefined,
       accountTag: acctTag,
     };
@@ -852,6 +861,62 @@ function parseCidrList(val) {
   if (!val) return '';
   var items = val.split(/[\\n,]+/).map(function(s) { return s.trim(); }).filter(Boolean);
   return items.join(',');
+}
+
+function addCidrRow(type, value, mode) {
+  var list = document.getElementById(type + '-cidr-list');
+  var row = document.createElement('div');
+  row.className = 'flex items-center gap-1.5';
+  var isInclude = mode !== 'exclude';
+  row.innerHTML =
+    '<button type="button" onclick="toggleCidrMode(this)" class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded border ' +
+    (isInclude ? 'border-emerald-500 text-emerald-400' : 'border-red-500 text-red-400') +
+    '" data-mode="' + (isInclude ? 'include' : 'exclude') + '">' +
+    (isInclude ? 'Include' : 'Exclude') +
+    '</button>' +
+    '<input type="text" class="cidr-input flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1 text-xs text-white" placeholder="e.g. 10.0.0.0/8" value="' + (value || '') + '">' +
+    '<button type="button" onclick="removeCidrRow(this)" class="flex-shrink-0 text-cf-gray hover:text-red-400">' +
+    '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+    '</button>';
+  list.appendChild(row);
+  if (!value) row.querySelector('input').focus();
+}
+
+function toggleCidrMode(btn) {
+  var isInclude = btn.getAttribute('data-mode') === 'include';
+  if (isInclude) {
+    btn.setAttribute('data-mode', 'exclude');
+    btn.textContent = 'Exclude';
+    btn.className = 'flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded border border-red-500 text-red-400';
+  } else {
+    btn.setAttribute('data-mode', 'include');
+    btn.textContent = 'Include';
+    btn.className = 'flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded border border-emerald-500 text-emerald-400';
+  }
+}
+
+function removeCidrRow(btn) {
+  btn.closest('.flex').remove();
+}
+
+function getCidrFilter(type) {
+  var list = document.getElementById(type + '-cidr-list');
+  var rows = list.querySelectorAll('.flex');
+  var include = [];
+  var exclude = [];
+  rows.forEach(function(row) {
+    var input = row.querySelector('.cidr-input');
+    var modeBtn = row.querySelector('[data-mode]');
+    var val = input.value.trim();
+    if (!val) return;
+    if (modeBtn.getAttribute('data-mode') === 'exclude') {
+      exclude.push(val);
+    } else {
+      include.push(val);
+    }
+  });
+  if (include.length === 0 && exclude.length === 0) return null;
+  return { include: include, exclude: exclude };
 }
 
 // ============================================================
