@@ -24,7 +24,7 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 - **Store multiple Cloudflare accounts** per user with labels, account tags, and API tokens
 - **Set a default account** that auto-selects on page load
 - **Interactive account switcher** — dropdown in the header with tunnel auto-discovery on switch
-- **Active account bar** — always-visible indicator showing the selected account name and tag
+- **Active account bar** — always-visible indicator above the Query Filters showing the selected account name and tag; click it to jump straight to account settings
 
 ### Query & Filtering
 - **Direction filter** — ingress, egress, or both; charts and summary cards hide/show dynamically
@@ -43,8 +43,8 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 
 ### Data & Export
 - **4-panel chart dashboard** — ingress/egress time-series (with per-tunnel lines and legend) + percentile distribution bar charts
-- **Raw data table** — sortable time-series data points
-- **CSV export** — download all data including P95 values, CIDR subset breakdown, and per-direction statistics
+- **Per-tunnel raw data** — the Raw Data table and CSV export break down every 5-minute interval **per tunnel**, with dedicated **Tunnel** and **Region** columns (untagged tunnels default to `Global`). Columns: `Time, Direction, Tunnel, Region, Bit Rate, Bits, Packets`. The on-screen table shows the first 500 rows; the CSV includes all rows.
+- **CSV export** — downloads the full per-tunnel dataset plus summary rows (P95/peak/avg per direction), CIDR subset breakdown, and the per-region P95 breakdown
 - **Parallel query execution** — all weekly chunks and directions execute concurrently for fast results on long time ranges
 
 ### Infrastructure

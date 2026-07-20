@@ -1545,7 +1545,7 @@ function exportCsv() {
   if (!lastQueryData) return;
   function csvCell(v) {
     var s = String(v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    return /[",\\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
   var rows = [['Time', 'Direction', 'Tunnel', 'Region', 'Bit Rate (bps)', 'Bits', 'Packets']];
   buildRawRows(lastQueryData).forEach(function(r) {
