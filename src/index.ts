@@ -114,36 +114,24 @@ app.get('/api/region-tags', async (c) => {
   return c.json({ tags });
 });
 
-// On-demand reconciliation: prune tags for tunnels that no longer exist, return survivors
+// On-demand reconciliation: return all saved tags for the account.
+// Tags for tunnels not currently visible are kept (they may reappear in a
+// wider time-range query), so nothing is pruned here.
 app.post('/api/region-tags/sync', async (c) => {
   const body = await c.req.json<{ account_tag?: string; tunnelNames?: string[] }>();
   const accountTag = (body.account_tag || '').trim();
   if (!accountTag) return c.json({ error: 'account_tag is required' }, 400);
-  const tunnelNames = Array.isArray(body.tunnelNames) ? body.tunnelNames : [];
 
   const rows = await c.env.DB.prepare(
     'SELECT tunnel_name, region_code FROM tunnel_region_tags WHERE account_tag = ?'
   ).bind(accountTag).all();
 
-  const current = new Set(tunnelNames);
-  const stale: string[] = [];
   const tags: Record<string, string> = {};
   for (const r of (rows.results || []) as any[]) {
-    if (current.has(r.tunnel_name)) {
-      tags[r.tunnel_name] = r.region_code;
-    } else {
-      stale.push(r.tunnel_name);
-    }
+    tags[r.tunnel_name] = r.region_code;
   }
 
-  // Delete tags for removed tunnels/interconnects
-  for (const name of stale) {
-    await c.env.DB.prepare(
-      'DELETE FROM tunnel_region_tags WHERE account_tag = ? AND tunnel_name = ?'
-    ).bind(accountTag, name).run();
-  }
-
-  return c.json({ tags, pruned: stale });
+  return c.json({ tags });
 });
 
 // Upsert (or clear) a single tunnel's region tag

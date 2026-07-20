@@ -115,7 +115,12 @@ export function renderDashboard(userEmail: string): string {
     <div id="settings-panel" class="panel fade-in p-5 space-y-4 no-print hidden">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Accounts</h2>
-        <button onclick="showAddAccount()" class="px-3 py-1 text-xs font-semibold rounded-lg border border-cf-border text-cf-gray hover:border-cf-orange hover:text-cf-orange">+ Add Account</button>
+        <div class="flex items-center gap-2">
+          <button onclick="showAddAccount()" class="px-3 py-1 text-xs font-semibold rounded-lg border border-cf-border text-cf-gray hover:border-cf-orange hover:text-cf-orange">+ Add Account</button>
+          <button onclick="toggleSettings()" class="text-cf-gray hover:text-cf-orange" title="Close settings">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Saved accounts list -->
