@@ -147,6 +147,17 @@ export function renderDashboard(userEmail: string): string {
       </div>
     </div>
 
+    <!-- Active Account Bar -->
+    <div id="active-account-bar" class="hidden">
+      <div class="panel fade-in px-4 py-2.5 flex items-center gap-3">
+        <svg class="w-4 h-4 text-cf-orange flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <div>
+          <span class="text-xs font-semibold" style="color:var(--text-strong)" id="active-account-name"></span>
+          <span class="text-[10px] text-cf-gray font-mono ml-2" id="active-account-tag-display"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- Filters Panel (collapsible) -->
     <div class="panel fade-in p-5 no-print">
       <div class="flex items-center justify-between cursor-pointer" onclick="toggleFilters()">
@@ -174,13 +185,13 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Source / Destination CIDR -->
         <div>
-          <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2 mb-1">
             <label class="text-xs font-medium text-cf-gray">Source CIDR(s)</label>
             <button type="button" onclick="addCidrRow('source')" class="text-[10px] text-cf-orange hover:underline">+ Add</button>
           </div>
           <div id="source-cidr-list" class="space-y-1.5 mb-2"></div>
 
-          <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2 mb-1">
             <label class="text-xs font-medium text-cf-gray">Destination CIDR(s)</label>
             <button type="button" onclick="addCidrRow('dest')" class="text-[10px] text-cf-orange hover:underline">+ Add</button>
           </div>
@@ -242,18 +253,7 @@ export function renderDashboard(userEmail: string): string {
           <div class="flex gap-2">
             <input type="datetime-local" id="custom-start" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
             <span class="text-cf-gray self-center text-xs">to</span>
-            <input type="datetime-local" id="custom-end" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Status -->
-      <div id="query-status" class="text-xs text-cf-gray hidden"></div>
-      </div>
-    </div>
-
-    <!-- Active Account Bar -->
+         Active Account Bar -->
     <div id="active-account-bar" class="hidden">
       <div class="panel fade-in px-4 py-2.5 flex items-center gap-3">
         <svg class="w-4 h-4 text-cf-orange flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
