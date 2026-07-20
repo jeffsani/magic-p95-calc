@@ -1,3 +1,7 @@
+function infoTip(text: string): string {
+  return `<span class="info-tip" tabindex="0" role="button" aria-label="More info"><span class="info-ico">i</span><span class="info-bubble">${text}</span></span>`;
+}
+
 export function renderDashboard(userEmail: string): string {
   return `<!DOCTYPE html>
 <html lang="en" data-theme="dark">
@@ -66,6 +70,11 @@ export function renderDashboard(userEmail: string): string {
     .filter-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-primary); }
     .filter-chip.active { border-color: #F6821F; background: rgba(246,130,31,0.12); color: #F6821F; }
     .filter-chip:hover { border-color: rgba(246,130,31,0.5); }
+    .info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; outline: none; }
+    .info-ico { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; font-style: normal; line-height: 1; cursor: help; transition: all 0.15s; }
+    .info-tip:hover .info-ico, .info-tip:focus .info-ico { color: #F6821F; border-color: #F6821F; }
+    .info-bubble { display: none; position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; width: 240px; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,0.35); font-size: 11px; font-weight: 400; line-height: 1.45; color: var(--text-primary); text-transform: none; letter-spacing: normal; white-space: normal; }
+    .info-tip:hover .info-bubble, .info-tip:focus .info-bubble, .info-tip:focus-within .info-bubble { display: block; }
     @media print {
       header, .no-print { display: none !important; }
       body { background: #fff; color: #000; }
@@ -117,15 +126,15 @@ export function renderDashboard(userEmail: string): string {
         <h3 class="text-xs font-semibold" style="color:var(--text-strong)" id="account-form-title">Add Account</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label class="block text-xs font-medium text-cf-gray mb-1">Label <span class="text-[10px]">(optional)</span></label>
+            <label class="block text-xs font-medium text-cf-gray mb-1">Label <span class="text-[10px]">(optional)</span>${infoTip('A friendly name for this account. Shown in the account selector to help you tell accounts apart. Optional.')}</label>
             <input type="text" id="cfg-account-label" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. Production">
           </div>
           <div>
-            <label class="block text-xs font-medium text-cf-gray mb-1">Account Tag</label>
+            <label class="block text-xs font-medium text-cf-gray mb-1">Account Tag${infoTip('Your Cloudflare Account ID (32-character hex string). Find it on the account home page or in the dashboard URL.')}</label>
             <input type="text" id="cfg-account-tag" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. 7a0c39354edd897a1a98f6c7e50c6873">
           </div>
           <div>
-            <label class="block text-xs font-medium text-cf-gray mb-1">API Token <span class="text-[10px]">(Account Analytics: Read)</span></label>
+            <label class="block text-xs font-medium text-cf-gray mb-1">API Token <span class="text-[10px]">(Account Analytics: Read)</span>${infoTip('A Cloudflare API token scoped with \'Account Analytics: Read\' permission. Used to query network analytics for this account. Stored securely and never displayed after saving.')}</label>
             <input type="password" id="cfg-api-token" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-2 text-sm text-white" placeholder="Bearer token">
           </div>
         </div>
@@ -140,7 +149,7 @@ export function renderDashboard(userEmail: string): string {
 
       <!-- Active account selector (shown in filter area) -->
       <div class="flex items-center gap-2">
-        <label class="text-xs font-medium text-cf-gray">Active Account:</label>
+        <label class="text-xs font-medium text-cf-gray">Active Account:${infoTip('The account whose analytics are queried. Add accounts above, then choose which one is active here.')}</label>
         <select id="active-account-select" onchange="onAccountSelected()" class="bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white">
           <option value="">No accounts configured</option>
         </select>
@@ -149,9 +158,10 @@ export function renderDashboard(userEmail: string): string {
 
     <!-- Active Account Bar -->
     <div id="active-account-bar" class="hidden">
-      <div class="panel fade-in px-4 py-2.5 flex items-center gap-3">
+      <div onclick="toggleSettings()" title="Open account settings" class="panel fade-in px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:border-cf-orange transition-colors">
         <svg class="w-4 h-4 text-cf-orange flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         <div>
+          <span class="text-xs font-medium text-cf-gray">Active Account: </span>
           <span class="text-xs font-semibold" style="color:var(--text-strong)" id="active-account-name"></span>
           <span class="text-[10px] text-cf-gray font-mono ml-2" id="active-account-tag-display"></span>
         </div>
@@ -175,7 +185,7 @@ export function renderDashboard(userEmail: string): string {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <!-- Direction -->
         <div>
-          <label class="block text-xs font-medium text-cf-gray mb-1">Direction</label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Direction${infoTip('Which traffic direction to analyze. Ingress is traffic entering your network; egress is traffic leaving it. Both shows each separately.')}</label>
           <div class="flex gap-1">
             <span class="filter-chip active" data-dir="both" onclick="setDirection(this)">Both</span>
             <span class="filter-chip" data-dir="ingress" onclick="setDirection(this)">Ingress</span>
@@ -186,13 +196,13 @@ export function renderDashboard(userEmail: string): string {
         <!-- Source / Destination CIDR -->
         <div>
           <div class="flex items-center gap-2 mb-1">
-            <label class="text-xs font-medium text-cf-gray">Source CIDR(s)</label>
+            <label class="text-xs font-medium text-cf-gray">Source CIDR(s)${infoTip('Limit results to traffic originating from these source IP ranges (CIDR notation). Add one or more; leave empty to include all sources.')}</label>
             <button type="button" onclick="addCidrRow('source')" class="text-[10px] text-cf-orange hover:underline">+ Add</button>
           </div>
           <div id="source-cidr-list" class="space-y-1.5 mb-2"></div>
 
           <div class="flex items-center gap-2 mb-1">
-            <label class="text-xs font-medium text-cf-gray">Destination CIDR(s)</label>
+            <label class="text-xs font-medium text-cf-gray">Destination CIDR(s)${infoTip('Limit results to traffic destined for these IP ranges (CIDR notation). Add one or more; leave empty to include all destinations.')}</label>
             <button type="button" onclick="addCidrRow('dest')" class="text-[10px] text-cf-orange hover:underline">+ Add</button>
           </div>
           <div id="dest-cidr-list" class="space-y-1.5"></div>
@@ -200,24 +210,27 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Tunnel / Interconnect Multi-Select -->
         <div id="tunnel-filter-wrap">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnels / Interconnects <span class="text-[10px] text-cf-gray">(assign region tags)</span></label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnels / Interconnects <span class="text-[10px] text-cf-gray">(set an optional region tag per tunnel for a regional traffic breakdown)</span>${infoTip('Select which tunnels or interconnects to include in the P95 calculation. Open the dropdown to assign an optional region tag to each tunnel; tagging enables the per-region traffic breakdown below.')}</label>
           <div class="relative">
             <button type="button" id="tunnel-select-btn" onclick="toggleTunnelDropdown()" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white text-left flex justify-between items-center">
               <span id="tunnel-select-label">All Tunnels</span>
               <svg class="w-3 h-3 text-cf-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
             <div id="tunnel-dropdown" class="hidden absolute z-50 mt-1 bg-cf-dark border border-cf-border rounded-lg shadow-lg max-h-60 overflow-y-auto" style="min-width:100%;width:max-content;max-width:420px">
-              <label class="flex items-center gap-2 px-3 py-2 hover:bg-cf-border cursor-pointer text-sm text-white border-b border-cf-border">
-                <input type="checkbox" id="tunnel-select-all" checked onchange="toggleAllTunnels(this.checked)" class="accent-orange-500">
-                <span class="font-medium">Select All</span>
-              </label>
+              <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-cf-border sticky top-0 bg-cf-dark">
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-white">
+                  <input type="checkbox" id="tunnel-select-all" checked onchange="toggleAllTunnels(this.checked)" class="accent-orange-500">
+                  <span class="font-medium">Select All</span>
+                </label>
+                <select id="bulk-region-select" onchange="setRegionForSelected(this)" onclick="event.stopPropagation()" class="bg-cf-dark border border-cf-border rounded px-1 py-0.5 text-[11px] text-white"></select>
+              </div>
               <div id="tunnel-options"></div>
             </div>
           </div>
 
           <!-- Region Multi-Select (only shown when tags exist) -->
           <div id="region-filter-wrap" class="hidden mt-2">
-            <label class="block text-xs font-medium text-cf-gray mb-1">Regions</label>
+            <label class="block text-xs font-medium text-cf-gray mb-1">Regions${infoTip('Filter results to tunnels tagged with the selected regions. Only appears once you have assigned region tags to tunnels.')}</label>
             <div class="relative">
               <button type="button" id="region-select-btn" onclick="toggleRegionDropdown()" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white text-left flex justify-between items-center">
                 <span id="region-select-label">All Regions</span>
@@ -234,7 +247,7 @@ export function renderDashboard(userEmail: string): string {
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <!-- Time Range Presets -->
         <div class="lg:col-span-2">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Time Range</label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Time Range${infoTip('The time window to analyze. Presets are relative to now; choose Custom to pick exact start and end times (up to 16 weeks back).')}</label>
           <div class="flex flex-wrap gap-1">
             <span class="filter-chip" data-range="1h" onclick="setTimeRange(this)">1h</span>
             <span class="filter-chip" data-range="6h" onclick="setTimeRange(this)">6h</span>
@@ -249,18 +262,18 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Custom Date Pickers -->
         <div id="custom-dates" class="lg:col-span-2 hidden">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range <span class="text-[10px] text-cf-gray">(max 16 weeks back)</span></label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range <span class="text-[10px] text-cf-gray">(max 16 weeks back)</span>${infoTip('Pick exact start and end date/times. Analytics data is retained for up to 16 weeks in the past.')}</label>
           <div class="flex gap-2">
             <input type="datetime-local" id="custom-start" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
             <span class="text-cf-gray self-center text-xs">to</span>
-         Active Account Bar -->
-    <div id="active-account-bar" class="hidden">
-      <div class="panel fade-in px-4 py-2.5 flex items-center gap-3">
-        <svg class="w-4 h-4 text-cf-orange flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        <div>
-          <span class="text-xs font-semibold" style="color:var(--text-strong)" id="active-account-name"></span>
-          <span class="text-[10px] text-cf-gray font-mono ml-2" id="active-account-tag-display"></span>
+            <input type="datetime-local" id="custom-end" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
+          </div>
         </div>
+
+      </div>
+
+      <!-- Status -->
+      <div id="query-status" class="text-xs text-cf-gray hidden"></div>
       </div>
     </div>
 
@@ -820,8 +833,19 @@ function regionSelectHtml(tunnel) {
     'data-tunnel="' + escAttr(tunnel) + '" onchange="onRegionTagChange(this)" onclick="event.stopPropagation()">' + opts + '</select>';
 }
 
+function renderBulkRegionSelect() {
+  var sel = document.getElementById('bulk-region-select');
+  if (!sel) return;
+  var opts = '<option value="__none__">Set region for selected…</option>';
+  REGIONS.forEach(function(r) { opts += '<option value="' + r.code + '">' + r.label + '</option>'; });
+  opts += '<option value="__clear__">— Clear region —</option>';
+  sel.innerHTML = opts;
+  sel.value = '__none__';
+}
+
 function populateTunnelFilter(tunnelNames) {
   allTunnelNames = tunnelNames;
+  renderBulkRegionSelect();
   renderTunnelOptions();
   document.getElementById('tunnel-select-all').checked = true;
   updateTunnelLabel();
@@ -871,6 +895,33 @@ function onRegionTagChange(sel) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ account_tag: acct, tunnel_name: tunnel, region_code: code }),
   }).catch(function(){});
+}
+
+// Bulk-assign the chosen region to every currently-selected (checked) tunnel.
+// Updates each row's individual select in place so checkbox selection is preserved.
+function setRegionForSelected(sel) {
+  var val = sel.value;
+  sel.value = '__none__'; // reset control back to placeholder
+  if (val === '__none__') return;
+  var code = (val === '__clear__') ? '' : val;
+  var acct = activeAccountTag || (document.getElementById('active-account-select') || {}).value;
+  if (!acct) return;
+  var selected = getSelectedTunnels();
+  if (selected.length === 0) return;
+  var selectedSet = {};
+  selected.forEach(function(t) { selectedSet[t] = true; });
+  document.querySelectorAll('.tunnel-region-select').forEach(function(rs) {
+    var tunnel = rs.getAttribute('data-tunnel');
+    if (!selectedSet[tunnel]) return;
+    rs.value = code;
+    if (code) { regionTags[tunnel] = code; } else { delete regionTags[tunnel]; }
+    fetch('/api/region-tags', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_tag: acct, tunnel_name: tunnel, region_code: code }),
+    }).catch(function(){});
+  });
+  populateRegionFilter();
 }
 
 // Region multi-select filter — only shows regions that have >=1 tagged tunnel
