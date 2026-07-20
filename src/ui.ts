@@ -1543,14 +1543,14 @@ var lastQueryData = null;
 
 function exportCsv() {
   if (!lastQueryData) return;
-  var rows = [['Time', 'Direction', 'Bit Rate (bps)', 'Bits', 'Packets']];
-  lastQueryData.ingress.series.forEach(function(p) {
-    rows.push([p.time, 'ingress', p.bitRate, p.bits, p.packets]);
+  function csvCell(v) {
+    var s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  var rows = [['Time', 'Direction', 'Tunnel', 'Region', 'Bit Rate (bps)', 'Bits', 'Packets']];
+  buildRawRows(lastQueryData).forEach(function(r) {
+    rows.push([r.time, r.dir, csvCell(r.tunnel), csvCell(r.region), r.bitRate, r.bits, r.packets]);
   });
-  lastQueryData.egress.series.forEach(function(p) {
-    rows.push([p.time, 'egress', p.bitRate, p.bits, p.packets]);
-  });
-  rows.sort(function(a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
 
   // Add summary rows
   rows.push([]);
