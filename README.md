@@ -51,16 +51,19 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 - **Parallel query execution** — all weekly chunks and directions execute concurrently for fast results on long time ranges
 
 ### Historical Data Archiving
+
+![Archive Settings](src/accounts.png)
+
 - **R2-backed long-term storage** — archive bandwidth data beyond the 16-week GraphQL API retention limit for annual and mid-year trend analysis
 - **Weekly cron job** — automatically archives the previous week's data every Sunday at 2 AM UTC at full 5-minute granularity
 - **D1 index + R2 objects** — lightweight D1 index for fast lookups, bulk time-series data stored as JSON in R2
 - **Seamless query augmentation** — when a query spans beyond live retention, archived data is automatically merged with live GraphQL data (with deduplication in the overlap zone)
-- **Global toggle + per-account opt-out** — enable archiving globally, then opt out individual accounts if needed
-- **Configurable retention** — 6 months, 1 year, 2 years, 3 years, 5 years, or unlimited; expired archives are auto-purged
-- **On-demand backfill** — instantly archive up to 15 weeks of available historical data per account
-- **Manual purge** — purge all archives or per-account, with confirmation
-- **Extended time range presets** — 3m, 6m, 1y presets appear when archiving is enabled
-- **Archive info banner** — shows data source breakdown (archived weeks + live data) when results include archived data
+- **Global toggle + per-account opt-out** — enable archiving globally in Settings, then opt out individual accounts if needed
+- **Configurable retention** — 6 months, 1 year, 2 years, 3 years, 5 years, or unlimited; expired archives are auto-purged by the weekly cron
+- **On-demand backfill** — click "Backfill Now" per account to instantly archive up to 15 weeks of available historical data
+- **Manual purge** — purge all archives or per-account with confirmation dialog
+- **Extended time range presets** — 3m, 6m, 1y presets appear in the Query Filters when archiving is enabled
+- **Archive info banner** — shows data source breakdown (archived weeks + live data) when query results span both sources
 
 ### Infrastructure
 - **Multi-user with D1 persistence** — per-user account settings and query history stored in Cloudflare D1
@@ -208,6 +211,39 @@ Then in the dashboard, click the ⚙️ gear icon to open Settings:
 5. Repeat for additional accounts
 6. Click **Set Default** on the account you want auto-selected on page load
 7. Select the active account from the dropdown in the header
+
+## Using Historical Data Archiving
+
+Once the R2 bucket is created and the archive migration is applied, you can enable archiving from the dashboard:
+
+1. Open **Settings** (⚙️ gear icon) and scroll to the **Historical Data Archiving** section
+2. Check **Enable Historical Archiving** — this enables the weekly cron and shows extended time range presets (3m, 6m, 1y)
+3. Choose a **Retention** period (6 months – unlimited) — archived data older than this is automatically purged each Sunday
+4. Click **Backfill Now** on any account to immediately archive all available historical data (up to 15 weeks)
+5. To exclude a specific account from automatic archiving, click **Opt Out** next to it
+
+### How It Works
+
+- Every **Sunday at 2 AM UTC**, the cron job runs and archives the previous week's data for all enabled accounts
+- Archived data is stored in R2 as weekly JSON objects at full **5-minute granularity** (negligible cost — typically <$1/year even with 100 tunnels)
+- When you query a time range that extends beyond the 16-week live retention limit, the tool automatically:
+  1. Fetches archived data from R2 for the older portion
+  2. Fetches live data from the GraphQL API for the recent portion
+  3. Merges and deduplicates the overlap zone (2-week buffer)
+  4. Displays an **archive info banner** showing the data source breakdown
+- The **Custom** date picker removes the 16-week restriction when archiving is enabled, allowing you to query any archived period
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/archive/settings` | `GET` | Get current archive settings (enabled, retention) |
+| `/api/archive/settings` | `POST` | Update archive settings |
+| `/api/archive/status` | `GET` | Get per-account archive status (weeks, size, date range) |
+| `/api/settings/:id/archive` | `PUT` | Toggle per-account archive opt-out |
+| `/api/archive/backfill` | `POST` | Trigger on-demand backfill for an account |
+| `/api/archive/purge` | `POST` | Purge archives (all or specific account, optionally by age) |
+| `/api/archive/:accountTag` | `DELETE` | Delete all archives for an account |
 
 ## Local Development
 

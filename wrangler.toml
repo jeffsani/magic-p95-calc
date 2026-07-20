@@ -22,7 +22,7 @@ binding = "ARCHIVE"
 bucket_name = "p95-archive"
 
 [triggers]
-crons = [ "0 2 * * 0" ]
+crons = [ "0 2 * * sun" ]
 
 [observability]
 enabled = true
