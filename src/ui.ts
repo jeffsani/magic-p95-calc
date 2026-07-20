@@ -349,50 +349,59 @@ export function renderDashboard(userEmail: string): string {
       </div>
     </div>
 
-    <!-- Charts: 4-panel layout -->
+    <!-- Charts: 4-panel layout (collapsible) -->
     <div id="charts-section" class="hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Ingress Time Series -->
-        <div class="panel p-4 fade-in dir-ingress">
-          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate <span class="text-cf-gray font-normal" id="ingress-interval-label">(avg over 5min window)</span></h3>
-          <div style="height:280px"><canvas id="chart-ingress-ts"></canvas></div>
+      <div class="panel p-4 fade-in">
+        <div class="flex items-center gap-2 cursor-pointer mb-3" onclick="toggleCharts()">
+          <svg id="charts-chevron" class="w-4 h-4 text-cf-gray transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Charts</h2>
         </div>
-        <!-- Ingress Percentile -->
-        <div class="panel p-4 fade-in dir-ingress">
-          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="ingress-pct-label">(avg over 5min window)</span></h3>
-          <div style="height:280px"><canvas id="chart-ingress-pct"></canvas></div>
-        </div>
-        <!-- Egress Time Series -->
-        <div class="panel p-4 fade-in dir-egress">
-          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate <span class="text-cf-gray font-normal" id="egress-interval-label">(avg over 5min window)</span></h3>
-          <div style="height:280px"><canvas id="chart-egress-ts"></canvas></div>
-        </div>
-        <!-- Egress Percentile -->
-        <div class="panel p-4 fade-in dir-egress">
-          <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="egress-pct-label">(avg over 5min window)</span></h3>
-          <div style="height:280px"><canvas id="chart-egress-pct"></canvas></div>
+        <div id="charts-body" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Ingress Time Series -->
+          <div class="panel p-4 fade-in dir-ingress">
+            <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate <span class="text-cf-gray font-normal" id="ingress-interval-label">(avg over 5min window)</span></h3>
+            <div style="height:280px"><canvas id="chart-ingress-ts"></canvas></div>
+          </div>
+          <!-- Ingress Percentile -->
+          <div class="panel p-4 fade-in dir-ingress">
+            <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Ingress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="ingress-pct-label">(avg over 5min window)</span></h3>
+            <div style="height:280px"><canvas id="chart-ingress-pct"></canvas></div>
+          </div>
+          <!-- Egress Time Series -->
+          <div class="panel p-4 fade-in dir-egress">
+            <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate <span class="text-cf-gray font-normal" id="egress-interval-label">(avg over 5min window)</span></h3>
+            <div style="height:280px"><canvas id="chart-egress-ts"></canvas></div>
+          </div>
+          <!-- Egress Percentile -->
+          <div class="panel p-4 fade-in dir-egress">
+            <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="egress-pct-label">(avg over 5min window)</span></h3>
+            <div style="height:280px"><canvas id="chart-egress-pct"></canvas></div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Per-Region P95 Breakdown -->
+    <!-- Per-Region P95 Breakdown (collapsible) -->
     <div id="region-section" class="hidden">
       <div class="panel p-4 fade-in">
-        <div class="flex items-center gap-2 mb-3">
+        <div class="flex items-center gap-2 cursor-pointer mb-3" onclick="toggleRegionSection()">
+          <svg id="region-chevron" class="w-4 h-4 text-cf-gray transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           <svg class="w-4 h-4 text-cf-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <h3 class="text-xs font-semibold" style="color:var(--text-strong)">Per-Region P95 Breakdown</h3>
+          <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Per-Region P95 Breakdown</h2>
         </div>
-        <div id="region-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-        <div id="region-chart-wrap" class="mt-4 hidden">
-          <h4 class="text-xs font-semibold mb-2" style="color:var(--text-strong)">Regional Bit Rate (aggregate per region)</h4>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div id="region-ts-ingress-wrap" class="panel p-4">
-              <h5 class="text-[11px] font-semibold mb-2 text-cf-gray">Ingress</h5>
-              <div style="height:260px"><canvas id="chart-region-ingress"></canvas></div>
-            </div>
-            <div id="region-ts-egress-wrap" class="panel p-4">
-              <h5 class="text-[11px] font-semibold mb-2 text-cf-gray">Egress</h5>
-              <div style="height:260px"><canvas id="chart-region-egress"></canvas></div>
+        <div id="region-body">
+          <div id="region-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+          <div id="region-chart-wrap" class="mt-4 hidden">
+            <h4 class="text-xs font-semibold mb-2" style="color:var(--text-strong)">Regional Bit Rate (aggregate per region)</h4>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div id="region-ts-ingress-wrap" class="panel p-4">
+                <h5 class="text-[11px] font-semibold mb-2 text-cf-gray">Ingress</h5>
+                <div style="height:260px"><canvas id="chart-region-ingress"></canvas></div>
+              </div>
+              <div id="region-ts-egress-wrap" class="panel p-4">
+                <h5 class="text-[11px] font-semibold mb-2 text-cf-gray">Egress</h5>
+                <div style="height:260px"><canvas id="chart-region-egress"></canvas></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1535,6 +1544,20 @@ function renderDataTable(data) {
   if (rows.length > 500) {
     tbody.innerHTML += '<tr><td colspan="7" class="py-2 text-cf-gray text-center">Showing 500 of ' + rows.length + ' rows</td></tr>';
   }
+}
+
+function toggleCharts() {
+  var body = document.getElementById('charts-body');
+  var chevron = document.getElementById('charts-chevron');
+  body.classList.toggle('hidden');
+  chevron.style.transform = body.classList.contains('hidden') ? 'rotate(-90deg)' : '';
+}
+
+function toggleRegionSection() {
+  var body = document.getElementById('region-body');
+  var chevron = document.getElementById('region-chevron');
+  body.classList.toggle('hidden');
+  chevron.style.transform = body.classList.contains('hidden') ? 'rotate(-90deg)' : '';
 }
 
 function toggleDataTable() {
