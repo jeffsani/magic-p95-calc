@@ -410,6 +410,8 @@ export function renderDashboard(userEmail: string): string {
               <tr class="text-left text-cf-gray border-b border-cf-border">
                 <th class="pb-2 pr-4">Time</th>
                 <th class="pb-2 pr-4">Direction</th>
+                <th class="pb-2 pr-4">Tunnel</th>
+                <th class="pb-2 pr-4">Region</th>
                 <th class="pb-2 pr-4">Bit Rate</th>
                 <th class="pb-2 pr-4">Bits</th>
                 <th class="pb-2">Packets</th>
@@ -1467,15 +1469,49 @@ function renderPercentileChart(canvasId, chartKey, percentiles, p95Value, color)
   });
 }
 
-function renderDataTable(data) {
+// Build a tunnel -> region label map from the query's perRegion breakdown.
+// Untagged tunnels (and anything missing) default to "Global".
+function buildTunnelRegionMap(data) {
+  var map = {};
+  (data.perRegion || []).forEach(function(r) {
+    var label = (r.region === 'UNTAGGED') ? 'Global' : r.regionLabel;
+    (r.tunnels || []).forEach(function(t) { map[t] = label; });
+  });
+  return map;
+}
+
+// Flatten per-tunnel time-series into rows: one per tunnel/interval/direction.
+function buildRawRows(data) {
+  var regionMap = buildTunnelRegionMap(data);
   var rows = [];
-  data.ingress.series.forEach(function(p) {
-    rows.push({ time: p.time, dir: 'ingress', bitRate: p.bitRate, bits: p.bits, packets: p.packets });
+  function pushDir(dir, tunnelSeries) {
+    var series = tunnelSeries || {};
+    Object.keys(series).forEach(function(tunnel) {
+      series[tunnel].forEach(function(p) {
+        rows.push({
+          time: p.time,
+          dir: dir,
+          tunnel: tunnel,
+          region: regionMap[tunnel] || 'Global',
+          bitRate: p.bitRate,
+          bits: p.bits,
+          packets: p.packets,
+        });
+      });
+    });
+  }
+  pushDir('ingress', data.ingress.tunnelSeries);
+  pushDir('egress', data.egress.tunnelSeries);
+  rows.sort(function(a, b) {
+    if (a.time !== b.time) return a.time.localeCompare(b.time);
+    if (a.tunnel !== b.tunnel) return a.tunnel.localeCompare(b.tunnel);
+    return a.dir.localeCompare(b.dir);
   });
-  data.egress.series.forEach(function(p) {
-    rows.push({ time: p.time, dir: 'egress', bitRate: p.bitRate, bits: p.bits, packets: p.packets });
-  });
-  rows.sort(function(a, b) { return a.time.localeCompare(b.time); });
+  return rows;
+}
+
+function renderDataTable(data) {
+  var rows = buildRawRows(data);
 
   var tbody = document.getElementById('data-table-rows');
   tbody.innerHTML = rows.slice(0, 500).map(function(r) {
@@ -1483,6 +1519,8 @@ function renderDataTable(data) {
     return '<tr class="border-b border-cf-border">' +
       '<td class="py-1.5 pr-4" style="color:var(--text-primary)">' + formatTime(r.time) + '</td>' +
       '<td class="py-1.5 pr-4"><span style="color:' + dirColor + '">' + r.dir + '</span></td>' +
+      '<td class="py-1.5 pr-4" style="color:var(--text-primary)">' + r.tunnel + '</td>' +
+      '<td class="py-1.5 pr-4 text-cf-gray">' + r.region + '</td>' +
       '<td class="py-1.5 pr-4">' + formatBps(r.bitRate) + '</td>' +
       '<td class="py-1.5 pr-4">' + r.bits.toLocaleString() + '</td>' +
       '<td class="py-1.5">' + r.packets.toLocaleString() + '</td>' +
@@ -1490,7 +1528,7 @@ function renderDataTable(data) {
   }).join('');
 
   if (rows.length > 500) {
-    tbody.innerHTML += '<tr><td colspan="5" class="py-2 text-cf-gray text-center">Showing 500 of ' + rows.length + ' rows</td></tr>';
+    tbody.innerHTML += '<tr><td colspan="7" class="py-2 text-cf-gray text-center">Showing 500 of ' + rows.length + ' rows</td></tr>';
   }
 }
 
