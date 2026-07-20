@@ -35,6 +35,9 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 - **Collapsible filter panel** — collapse the query filters to focus on the data view
 
 ### Per-Region P95 Analytics
+
+![Per-Region P95 Analytics](src/regions.png)
+
 - **Region metadata tags** — assign a region to each tunnel/interconnect directly from the Tunnels/Interconnects dropdown. Tags are stored **per account** (shared across users of that account) in D1.
 - **On-demand reconciliation** — every time tunnels are enumerated (page load, account switch, token test), tags are synced: surviving tunnels keep their tags and tags for **removed** tunnels/interconnects are automatically deleted.
 - **Per-region breakdown** — a dedicated section renders per-region P95 summary cards (ingress/egress P95, peak, avg) plus a grouped time-series chart with one line per region.
