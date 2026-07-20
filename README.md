@@ -50,6 +50,18 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 - **CSV export** — downloads the full per-tunnel dataset plus summary rows (P95/peak/avg per direction), CIDR subset breakdown, and the per-region P95 breakdown
 - **Parallel query execution** — all weekly chunks and directions execute concurrently for fast results on long time ranges
 
+### Historical Data Archiving
+- **R2-backed long-term storage** — archive bandwidth data beyond the 16-week GraphQL API retention limit for annual and mid-year trend analysis
+- **Weekly cron job** — automatically archives the previous week's data every Sunday at 2 AM UTC at full 5-minute granularity
+- **D1 index + R2 objects** — lightweight D1 index for fast lookups, bulk time-series data stored as JSON in R2
+- **Seamless query augmentation** — when a query spans beyond live retention, archived data is automatically merged with live GraphQL data (with deduplication in the overlap zone)
+- **Global toggle + per-account opt-out** — enable archiving globally, then opt out individual accounts if needed
+- **Configurable retention** — 6 months, 1 year, 2 years, 3 years, 5 years, or unlimited; expired archives are auto-purged
+- **On-demand backfill** — instantly archive up to 15 weeks of available historical data per account
+- **Manual purge** — purge all archives or per-account, with confirmation
+- **Extended time range presets** — 3m, 6m, 1y presets appear when archiving is enabled
+- **Archive info banner** — shows data source breakdown (archived weeks + live data) when results include archived data
+
 ### Infrastructure
 - **Multi-user with D1 persistence** — per-user account settings and query history stored in Cloudflare D1
 - **Token validation** — Test Token verifies the account-level API token has the correct permissions and discovers available tunnels
@@ -121,6 +133,22 @@ npx wrangler d1 execute p95-calc-db --remote --file=./schema.sql
 
 # For local dev:
 npx wrangler d1 execute p95-calc-db --local --file=./schema.sql
+```
+
+### Step 3b: Create an R2 bucket (for historical archiving)
+
+```bash
+npx wrangler r2 bucket create p95-archive
+```
+
+The bucket is already configured in `wrangler.toml` as the `ARCHIVE` binding. For existing installations, run the archive migration:
+
+```bash
+# For production:
+npx wrangler d1 execute p95-calc-db --remote --file=./migrate-archive.sql
+
+# For local dev:
+npx wrangler d1 execute p95-calc-db --local --file=./migrate-archive.sql
 ```
 
 ### Step 4: Configure your domain (optional)
@@ -201,7 +229,9 @@ The dashboard will be available at `http://localhost:8787` without authenticatio
 ## Tech Stack
 
 - **Cloudflare Worker** — TypeScript + [Hono](https://hono.dev) framework
-- **D1** — SQLite database for per-user settings and query history
+- **D1** — SQLite database for per-user settings, query history, and archive index
+- **R2** — Object storage for historical bandwidth data archives
+- **Cron Triggers** — Weekly scheduled archiving (Sundays 2 AM UTC)
 - **Cloudflare Access** — Zero Trust authentication (JWT-based)
 - **Chart.js** — Time-series and bar charts
 - **Tailwind CSS** — Styling via CDN
@@ -215,23 +245,25 @@ The dashboard will be available at `http://localhost:8787` without authenticatio
 
 **API limits**: 10,000 rows per query, 300 queries per 5 minutes. The tool automatically chunks time ranges into weekly windows and queries each direction separately to stay within limits.
 
-**Data retention**: Network Analytics data is retained for **16 weeks**.
+**Data retention**: Network Analytics data is retained for **16 weeks**. With historical archiving enabled, data is preserved in R2 indefinitely (up to the configured retention period).
 
 ## Project Structure
 
 ```
 src/
-├── index.ts      # Hono app — API routes (settings, query, test-token), middleware
+├── index.ts      # Hono app — API routes (settings, query, archive, test-token), middleware, scheduled handler
+├── archive.ts    # Historical data archiving — R2 read/write, D1 index, cron logic, query range splitting
 ├── auth.ts       # Cloudflare Access JWT authentication middleware
 ├── graphql.ts    # GraphQL query builder with parallel weekly chunking
 ├── p95.ts        # 95th percentile calculation (nearest-rank method)
-├── types.ts      # TypeScript interfaces (BandwidthQuery, BandwidthResult, etc.)
+├── types.ts      # TypeScript interfaces (BandwidthQuery, BandwidthResult, ArchiveData, etc.)
 ├── ui.ts         # Single-page dashboard HTML (Tailwind + Chart.js)
 └── p95.png       # Header graphic
 schema.sql                # D1 database schema
 migrate-multi-account.sql # Migration for multi-account + default account support
 migrate-region-tags.sql   # Migration for per-account tunnel region tags
-wrangler.toml             # Worker configuration
+migrate-archive.sql       # Migration for archive index, settings, and per-account opt-out
+wrangler.toml             # Worker configuration (D1 + R2 bindings, cron trigger)
 ```
 
 ## Author

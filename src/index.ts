@@ -1,11 +1,16 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Env, BandwidthQuery, BandwidthResult, RegionStats, TimeSeriesPoint } from './types';
+import type { Env, BandwidthQuery, BandwidthResult, RegionStats, TimeSeriesPoint, ArchiveInfo } from './types';
 import { REGION_CODES, REGION_LABELS } from './types';
 import { accessAuthMiddleware } from './auth';
 import { queryBandwidth, aggregateByTime } from './graphql';
 import { calculateP95 } from './p95';
 import { renderDashboard } from './ui';
+import {
+  getArchiveSettings, updateArchiveSettings, getArchiveStatus,
+  getArchivedData, deleteArchives, archiveWeek, runArchiveCron,
+  splitQueryRange, deduplicatePoints,
+} from './archive';
 
 type AppEnv = { Bindings: Env; Variables: { userEmail: string } };
 
@@ -24,7 +29,7 @@ app.get('/api/me', (c) => c.json({ email: c.get('userEmail') }));
 app.get('/api/settings', async (c) => {
   const email = c.get('userEmail');
   const rows = await c.env.DB.prepare(
-    'SELECT id, account_tag, account_label, api_token, is_default FROM user_settings WHERE user_email = ? ORDER BY is_default DESC, account_label ASC'
+    'SELECT id, account_tag, account_label, api_token, is_default, archive_opt_out FROM user_settings WHERE user_email = ? ORDER BY is_default DESC, account_label ASC'
   ).bind(email).all();
 
   const accounts = (rows.results || []).map((r: any) => ({
@@ -33,6 +38,7 @@ app.get('/api/settings', async (c) => {
     account_label: r.account_label || r.account_tag,
     has_token: !!r.api_token,
     is_default: !!r.is_default,
+    archive_opt_out: !!r.archive_opt_out,
   }));
 
   return c.json({ accounts });
@@ -325,12 +331,47 @@ app.post('/api/query', async (c) => {
 
   const direction = body.direction || 'both';
 
-  // 1. Always run the tunnel query for the real P95 (billing metric)
+  // 1. Determine if we need archived data (query extends beyond live retention)
+  const startMs = new Date(body.start).getTime();
+  const endMs = new Date(body.end).getTime();
+  const rangeSplit = splitQueryRange(startMs, endMs);
+
+  let archiveInfo: ArchiveInfo | undefined;
+  let archiveIngress: TimeSeriesPoint[] = [];
+  let archiveEgress: TimeSeriesPoint[] = [];
+  let archiveTunnels: string[] = [];
+
+  if (rangeSplit.archiveStart !== null && rangeSplit.archiveEnd !== null) {
+    try {
+      const archived = await getArchivedData(
+        c.env, accountTag,
+        new Date(rangeSplit.archiveStart).toISOString(),
+        new Date(rangeSplit.archiveEnd).toISOString(),
+      );
+      archiveIngress = archived.ingress;
+      archiveEgress = archived.egress;
+      archiveTunnels = archived.tunnels;
+
+      archiveInfo = {
+        archivedFrom: archived.ingress.length || archived.egress.length
+          ? new Date(rangeSplit.archiveStart).toISOString() : null,
+        archivedTo: archived.ingress.length || archived.egress.length
+          ? new Date(rangeSplit.archiveEnd).toISOString() : null,
+        liveFrom: new Date(rangeSplit.liveStart).toISOString(),
+        liveTo: new Date(rangeSplit.liveEnd).toISOString(),
+        archiveChunks: archived.chunks,
+      };
+    } catch (err: any) {
+      console.error('Archive retrieval failed:', err);
+    }
+  }
+
+  // 2. Always run the live tunnel query for the real P95 (billing metric)
   const tunnelParams: BandwidthQuery = {
     accountTag,
     apiToken,
-    start: body.start,
-    end: body.end,
+    start: new Date(rangeSplit.liveStart).toISOString(),
+    end: new Date(rangeSplit.liveEnd).toISOString(),
     direction,
   };
 
@@ -338,6 +379,14 @@ app.post('/api/query', async (c) => {
 
   if (raw.error) {
     return c.json({ error: raw.error }, 502);
+  }
+
+  // 3. Merge archive + live data, deduplicating the overlap zone
+  if (archiveIngress.length || archiveEgress.length) {
+    raw.ingress = deduplicatePoints([...archiveIngress, ...raw.ingress]);
+    raw.egress = deduplicatePoints([...archiveEgress, ...raw.egress]);
+    const allTunnels = new Set([...archiveTunnels, ...raw.tunnels]);
+    raw.tunnels = Array.from(allTunnels).sort();
   }
 
   // Load per-account region tag map (tunnel -> region code)
@@ -449,6 +498,7 @@ app.post('/api/query', async (c) => {
     tunnels: raw.tunnels,
     interval: raw.interval,
     chunks: raw.chunks,
+    archiveInfo,
     queryParams: {
       start: body.start,
       end: body.end,
@@ -551,6 +601,117 @@ app.get('/api/history', async (c) => {
   return c.json({ history: rows.results });
 });
 
+// ─── Archive Settings & Management ───
+
+app.get('/api/archive/settings', async (c) => {
+  const email = c.get('userEmail');
+  const settings = await getArchiveSettings(c.env, email);
+  return c.json(settings);
+});
+
+app.post('/api/archive/settings', async (c) => {
+  const email = c.get('userEmail');
+  const body = await c.req.json<{ archiving_enabled?: boolean; retention_months?: number }>();
+  await updateArchiveSettings(c.env, email, {
+    archiving_enabled: body.archiving_enabled,
+    retention_months: body.retention_months,
+  });
+  return c.json({ ok: true });
+});
+
+app.get('/api/archive/status', async (c) => {
+  const email = c.get('userEmail');
+  const settings = await getArchiveSettings(c.env, email);
+  const statuses = await getArchiveStatus(c.env, email);
+  return c.json({ settings, accounts: statuses });
+});
+
+app.put('/api/settings/:id/archive', async (c) => {
+  const email = c.get('userEmail');
+  const id = parseInt(c.req.param('id'));
+  const body = await c.req.json<{ archive_opt_out: boolean }>();
+  await c.env.DB.prepare(
+    'UPDATE user_settings SET archive_opt_out = ? WHERE id = ? AND user_email = ?'
+  ).bind(body.archive_opt_out ? 1 : 0, id, email).run();
+  return c.json({ ok: true });
+});
+
+app.post('/api/archive/backfill', async (c) => {
+  const email = c.get('userEmail');
+  const body = await c.req.json<{ account_tag: string }>();
+  const accountTag = (body.account_tag || '').trim();
+  if (!accountTag) return c.json({ error: 'account_tag is required' }, 400);
+
+  const settings = await c.env.DB.prepare(
+    'SELECT api_token FROM user_settings WHERE user_email = ? AND account_tag = ?'
+  ).bind(email, accountTag).first();
+  if (!settings?.api_token) return c.json({ error: 'No API token found for this account' }, 400);
+
+  const WEEK_MS = 7 * 24 * 3_600_000;
+  const nowMs = Date.now();
+  const maxBackfillMs = nowMs - (15 * WEEK_MS);
+  const archiveUpToMs = nowMs - WEEK_MS;
+
+  // Generate week boundaries
+  const weeks: Array<{ start: string; end: string }> = [];
+  let cursor = maxBackfillMs;
+  while (cursor + WEEK_MS <= archiveUpToMs) {
+    weeks.push({
+      start: new Date(cursor).toISOString(),
+      end: new Date(cursor + WEEK_MS).toISOString(),
+    });
+    cursor += WEEK_MS;
+  }
+
+  let archived = 0;
+  const errors: string[] = [];
+
+  for (const week of weeks) {
+    const exists = await c.env.DB.prepare(
+      'SELECT id FROM archive_index WHERE account_tag = ? AND week_start = ?'
+    ).bind(accountTag, week.start).first();
+    if (exists) continue;
+
+    const result = await archiveWeek(c.env, accountTag, settings.api_token as string, week.start, week.end);
+    if (result.ok) {
+      archived++;
+    } else {
+      errors.push(`${week.start}: ${result.error}`);
+    }
+  }
+
+  return c.json({ ok: true, archived, errors, totalWeeks: weeks.length });
+});
+
+app.post('/api/archive/purge', async (c) => {
+  const email = c.get('userEmail');
+  const body = await c.req.json<{ account_tag?: string; older_than?: string }>();
+
+  if (body.account_tag) {
+    const result = await deleteArchives(c.env, body.account_tag, body.older_than);
+    return c.json({ ok: true, ...result });
+  }
+
+  // Purge all accounts visible to this user
+  const accounts = await c.env.DB.prepare(
+    'SELECT account_tag FROM user_settings WHERE user_email = ?'
+  ).bind(email).all();
+
+  let totalDeleted = 0;
+  for (const acct of (accounts.results || []) as any[]) {
+    const result = await deleteArchives(c.env, acct.account_tag, body.older_than);
+    totalDeleted += result.deleted;
+  }
+
+  return c.json({ ok: true, deleted: totalDeleted });
+});
+
+app.delete('/api/archive/:accountTag', async (c) => {
+  const accountTag = c.req.param('accountTag');
+  const result = await deleteArchives(c.env, accountTag);
+  return c.json({ ok: true, ...result });
+});
+
 // ─── Dashboard ───
 app.get('/', (c) => {
   const userEmail = c.get('userEmail');
@@ -561,4 +722,18 @@ app.get('*', (c) => c.redirect('/'));
 
 export default {
   fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil((async () => {
+      console.log('Archive cron started:', new Date().toISOString());
+      try {
+        const result = await runArchiveCron(env);
+        console.log(`Archive cron completed: ${result.archived} weeks archived, ${result.errors.length} errors`);
+        if (result.errors.length > 0) {
+          console.error('Archive errors:', result.errors.slice(0, 10).join('; '));
+        }
+      } catch (err: any) {
+        console.error('Archive cron failed:', err.message);
+      }
+    })());
+  },
 };

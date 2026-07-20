@@ -159,6 +159,45 @@ export function renderDashboard(userEmail: string): string {
           <option value="">No accounts configured</option>
         </select>
       </div>
+
+      <!-- Archive Settings -->
+      <div class="border-t border-cf-border pt-4 mt-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-cf-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+            <h2 class="text-sm font-semibold" style="color:var(--text-strong)">Historical Data Archiving${infoTip('Archive bandwidth data to R2 for long-term retention beyond the 16-week GraphQL API limit. Enables annual and mid-year trend analysis. Data is archived weekly at full 5-minute granularity.')}</h2>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="archive-enabled-toggle" onchange="toggleArchiving(this.checked)" class="accent-orange-500">
+              <span class="text-xs font-medium" style="color:var(--text-strong)">Enable Historical Archiving</span>
+            </label>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-cf-gray">Retention:</label>
+              <select id="archive-retention-select" onchange="updateArchiveRetention(this.value)" class="bg-cf-dark border border-cf-border rounded-lg px-2 py-1 text-xs text-white">
+                <option value="6">6 months</option>
+                <option value="12" selected>1 year</option>
+                <option value="24">2 years</option>
+                <option value="36">3 years</option>
+                <option value="60">5 years</option>
+                <option value="0">Unlimited</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Per-account archive status -->
+          <div id="archive-status-list" class="space-y-2"></div>
+
+          <!-- Purge controls -->
+          <div id="archive-purge-controls" class="hidden flex items-center gap-2 pt-2 border-t border-cf-border">
+            <button onclick="purgeAllArchives()" class="px-3 py-1 text-[10px] font-semibold rounded-lg border border-red-700 text-red-400 hover:bg-red-900/30">Purge All Archives</button>
+            <span id="archive-purge-status" class="text-xs text-cf-gray"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Active Account Bar -->
@@ -252,7 +291,7 @@ export function renderDashboard(userEmail: string): string {
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <!-- Time Range Presets -->
         <div class="lg:col-span-2">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Time Range${infoTip('The time window to analyze. Presets are relative to now; choose Custom to pick exact start and end times (up to 16 weeks back).')}</label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Time Range${infoTip('The time window to analyze. Presets are relative to now; choose Custom to pick exact start and end times. Extended ranges (3m, 6m, 1y) require historical archiving to be enabled.')}</label>
           <div class="flex flex-wrap gap-1">
             <span class="filter-chip" data-range="1h" onclick="setTimeRange(this)">1h</span>
             <span class="filter-chip" data-range="6h" onclick="setTimeRange(this)">6h</span>
@@ -261,6 +300,9 @@ export function renderDashboard(userEmail: string): string {
             <span class="filter-chip" data-range="7d" onclick="setTimeRange(this)">7d</span>
             <span class="filter-chip" data-range="14d" onclick="setTimeRange(this)">14d</span>
             <span class="filter-chip" data-range="30d" onclick="setTimeRange(this)">30d</span>
+            <span class="filter-chip archive-range-chip hidden" data-range="90d" onclick="setTimeRange(this)">3m</span>
+            <span class="filter-chip archive-range-chip hidden" data-range="180d" onclick="setTimeRange(this)">6m</span>
+            <span class="filter-chip archive-range-chip hidden" data-range="365d" onclick="setTimeRange(this)">1y</span>
             <span class="filter-chip" data-range="custom" onclick="setTimeRange(this)">Custom</span>
           </div>
         </div>
@@ -344,6 +386,16 @@ export function renderDashboard(userEmail: string): string {
           <div class="panel stat-card fade-in dir-egress">
             <div class="stat-value" id="cidr-peak-egress" style="color:var(--text-strong);font-size:1rem">—</div>
             <div class="stat-label">CIDR Peak Egress</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Archive Info Banner (shown when query includes archived data) -->
+      <div id="archive-info-banner" class="hidden mt-3">
+        <div class="panel fade-in px-4 py-2.5 flex items-center gap-3" style="border-left:3px solid #F6821F">
+          <svg class="w-4 h-4 text-cf-orange flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+          <div class="text-xs text-cf-gray">
+            <span id="archive-info-text"></span>
           </div>
         </div>
       </div>
@@ -762,9 +814,175 @@ async function testToken() {
   }
 }
 
-// Load settings, user info, and tunnel list on page load
+// ============================================================
+// ARCHIVE MANAGEMENT
+// ============================================================
+var archivingEnabled = false;
+
+async function loadArchiveStatus() {
+  try {
+    var resp = await fetch('/api/archive/status');
+    var data = await resp.json();
+    archivingEnabled = data.settings.archiving_enabled;
+
+    // Update UI toggle
+    var toggle = document.getElementById('archive-enabled-toggle');
+    if (toggle) toggle.checked = archivingEnabled;
+
+    // Update retention select
+    var retSel = document.getElementById('archive-retention-select');
+    if (retSel) retSel.value = String(data.settings.retention_months || 12);
+
+    // Show/hide extended time range presets
+    document.querySelectorAll('.archive-range-chip').forEach(function(el) {
+      el.classList.toggle('hidden', !archivingEnabled);
+    });
+
+    // Render per-account archive status
+    renderArchiveStatusList(data.accounts || []);
+
+    // Show purge controls if any archives exist
+    var hasArchives = (data.accounts || []).some(function(a) { return a.totalWeeks > 0; });
+    var purgeCtrl = document.getElementById('archive-purge-controls');
+    if (purgeCtrl) purgeCtrl.classList.toggle('hidden', !hasArchives);
+  } catch(e) {}
+}
+
+function renderArchiveStatusList(accounts) {
+  var container = document.getElementById('archive-status-list');
+  if (!container || accounts.length === 0) { if (container) container.innerHTML = ''; return; }
+
+  container.innerHTML = accounts.map(function(a) {
+    var sizeStr = a.totalSizeBytes > 1048576
+      ? (a.totalSizeBytes / 1048576).toFixed(1) + ' MB'
+      : a.totalSizeBytes > 1024
+        ? (a.totalSizeBytes / 1024).toFixed(1) + ' KB'
+        : a.totalSizeBytes + ' B';
+    var statusText = a.totalWeeks > 0
+      ? a.totalWeeks + ' week' + (a.totalWeeks > 1 ? 's' : '') + ' archived (' + sizeStr + ')'
+      : 'No archived data';
+    var rangeText = (a.oldestWeek && a.newestWeek)
+      ? ' | ' + a.oldestWeek.slice(0, 10) + ' to ' + a.newestWeek.slice(0, 10)
+      : '';
+    var optOutClass = a.archiveOptOut ? 'text-red-400' : 'text-green-400';
+    var optOutLabel = a.archiveOptOut ? 'Opted out' : 'Active';
+    var optOutBtn = a.archiveOptOut
+      ? '<button onclick="setArchiveOptOut(\\'' + a.accountTag + '\\', false)" class="text-[10px] text-cf-orange hover:underline">Enable</button>'
+      : '<button onclick="setArchiveOptOut(\\'' + a.accountTag + '\\', true)" class="text-[10px] text-cf-gray hover:text-red-400">Opt Out</button>';
+    var backfillBtn = a.archiveOptOut
+      ? ''
+      : '<button onclick="backfillArchive(\\'' + a.accountTag + '\\')" class="text-[10px] text-cf-orange hover:underline">Backfill Now</button>';
+    var purgeBtn = a.totalWeeks > 0
+      ? '<button onclick="purgeAccountArchive(\\'' + a.accountTag + '\\')" class="text-[10px] text-red-400 hover:underline">Purge</button>'
+      : '';
+
+    return '<div class="flex items-center justify-between bg-cf-dark rounded-lg px-3 py-2 border border-cf-border">' +
+      '<div class="flex items-center gap-3 min-w-0">' +
+        '<span class="text-xs font-medium truncate" style="color:var(--text-strong)">' + (a.accountLabel || a.accountTag) + '</span>' +
+        '<span class="text-[10px] ' + optOutClass + '">' + optOutLabel + '</span>' +
+        '<span class="text-[10px] text-cf-gray">' + statusText + rangeText + '</span>' +
+      '</div>' +
+      '<div class="flex gap-2 flex-shrink-0">' +
+        backfillBtn + purgeBtn + optOutBtn +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function toggleArchiving(enabled) {
+  archivingEnabled = enabled;
+  try {
+    await fetch('/api/archive/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archiving_enabled: enabled }),
+    });
+    // Show/hide extended range chips
+    document.querySelectorAll('.archive-range-chip').forEach(function(el) {
+      el.classList.toggle('hidden', !enabled);
+    });
+    loadArchiveStatus();
+  } catch(e) {}
+}
+
+async function updateArchiveRetention(months) {
+  try {
+    await fetch('/api/archive/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ retention_months: parseInt(months) }),
+    });
+  } catch(e) {}
+}
+
+async function setArchiveOptOut(accountTag, optOut) {
+  var acct = savedAccounts.find(function(a) { return a.account_tag === accountTag; });
+  if (!acct) return;
+  try {
+    await fetch('/api/settings/' + acct.id + '/archive', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archive_opt_out: optOut }),
+    });
+    loadArchiveStatus();
+  } catch(e) {}
+}
+
+async function backfillArchive(accountTag) {
+  var statusEl = document.getElementById('archive-purge-status');
+  if (statusEl) statusEl.textContent = 'Backfilling ' + accountTag.slice(0, 8) + '... (this may take a few minutes)';
+  try {
+    var resp = await fetch('/api/archive/backfill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_tag: accountTag }),
+    });
+    var data = await resp.json();
+    if (data.ok) {
+      if (statusEl) statusEl.textContent = 'Backfill complete: ' + data.archived + ' week(s) archived.';
+    } else {
+      if (statusEl) statusEl.textContent = 'Backfill error: ' + (data.error || 'unknown');
+    }
+    loadArchiveStatus();
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Backfill failed: ' + e.message;
+  }
+}
+
+async function purgeAccountArchive(accountTag) {
+  if (!confirm('Delete all archived data for account ' + accountTag.slice(0, 8) + '...?')) return;
+  var statusEl = document.getElementById('archive-purge-status');
+  try {
+    var resp = await fetch('/api/archive/' + accountTag, { method: 'DELETE' });
+    var data = await resp.json();
+    if (statusEl) statusEl.textContent = 'Purged ' + (data.deleted || 0) + ' archive(s).';
+    loadArchiveStatus();
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Purge failed: ' + e.message;
+  }
+}
+
+async function purgeAllArchives() {
+  if (!confirm('Delete ALL archived data for all accounts? This cannot be undone.')) return;
+  var statusEl = document.getElementById('archive-purge-status');
+  try {
+    var resp = await fetch('/api/archive/purge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    var data = await resp.json();
+    if (statusEl) statusEl.textContent = 'Purged ' + (data.deleted || 0) + ' archive(s).';
+    loadArchiveStatus();
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Purge failed: ' + e.message;
+  }
+}
+
+// Load settings, user info, tunnel list, and archive status on page load
 (function(){
   loadSettings();
+  loadArchiveStatus();
   fetch('/api/me').then(function(r) { return r.json(); }).then(function(d) {
     if (d.email) document.getElementById('user-email').textContent = d.email;
   }).catch(function(){});
@@ -794,8 +1012,9 @@ function setTimeRange(el) {
   var customPanel = document.getElementById('custom-dates');
   customPanel.classList.toggle('hidden', selectedRange !== 'custom');
   if (selectedRange === 'custom') {
-    // Set min to 16 weeks ago
-    var minStr = new Date(Date.now() - MAX_RETENTION_MS).toISOString().slice(0, 16);
+    // When archiving is enabled, allow dates much further back; otherwise 16 weeks
+    var maxBack = archivingEnabled ? (5 * 365 * 86400000) : MAX_RETENTION_MS;
+    var minStr = new Date(Date.now() - maxBack).toISOString().slice(0, 16);
     document.getElementById('custom-start').setAttribute('min', minStr);
     document.getElementById('custom-end').setAttribute('min', minStr);
   }
@@ -803,16 +1022,20 @@ function setTimeRange(el) {
 
 function getTimeRange() {
   var now = new Date();
-  var minDate = new Date(now.getTime() - MAX_RETENTION_MS);
+  var minDate = archivingEnabled ? new Date(0) : new Date(now.getTime() - MAX_RETENTION_MS);
   if (selectedRange === 'custom') {
     var s = document.getElementById('custom-start').value;
     var e = document.getElementById('custom-end').value;
     if (!s || !e) return null;
     var startDate = new Date(s);
-    if (startDate < minDate) startDate = minDate;
+    if (!archivingEnabled && startDate < minDate) startDate = minDate;
     return { start: startDate.toISOString(), end: new Date(e).toISOString() };
   }
-  var ms = { '1h': 3600000, '6h': 21600000, '24h': 86400000, '48h': 172800000, '7d': 604800000, '14d': 1209600000, '30d': 2592000000 };
+  var ms = {
+    '1h': 3600000, '6h': 21600000, '24h': 86400000, '48h': 172800000,
+    '7d': 604800000, '14d': 1209600000, '30d': 2592000000,
+    '90d': 7776000000, '180d': 15552000000, '365d': 31536000000,
+  };
   var offset = ms[selectedRange] || 86400000;
   return { start: new Date(now.getTime() - offset).toISOString(), end: now.toISOString() };
 }
@@ -1163,6 +1386,23 @@ function renderResults(data) {
   document.getElementById('avg-egress').textContent = formatBps(data.egress.avgBps);
   document.getElementById('data-points').textContent = data.ingress.series.length + ' / ' + data.egress.series.length;
   document.getElementById('query-interval').textContent = data.interval + (data.chunks > 1 ? ' (' + data.chunks + ' chunks)' : '');
+
+  // Archive info banner
+  var archiveBanner = document.getElementById('archive-info-banner');
+  var archiveInfoText = document.getElementById('archive-info-text');
+  if (data.archiveInfo && data.archiveInfo.archivedFrom) {
+    var ai = data.archiveInfo;
+    var archFrom = new Date(ai.archivedFrom).toLocaleDateString();
+    var archTo = new Date(ai.archivedTo).toLocaleDateString();
+    var liveFrom = new Date(ai.liveFrom).toLocaleDateString();
+    var liveTo = new Date(ai.liveTo).toLocaleDateString();
+    archiveInfoText.innerHTML = '<strong style="color:var(--text-strong)">Data sources:</strong> ' +
+      '<span style="color:#F6821F">' + ai.archiveChunks + ' archived week(s)</span> (' + archFrom + ' \u2013 ' + archTo + ') + ' +
+      '<span style="color:#22c55e">live data</span> (' + liveFrom + ' \u2013 ' + liveTo + ')';
+    archiveBanner.classList.remove('hidden');
+  } else {
+    archiveBanner.classList.add('hidden');
+  }
 
   // CIDR subset
   if (data.cidr) {

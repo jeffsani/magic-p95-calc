@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  ARCHIVE: R2Bucket;
   ENVIRONMENT: string;
   CF_ACCESS_TEAM_DOMAIN: string;
 }
@@ -79,6 +80,37 @@ export interface RegionStats {
   egress: DirectionStats;
 }
 
+export interface ArchiveSettings {
+  archiving_enabled: boolean;
+  retention_months: number;
+}
+
+export interface ArchiveStatus {
+  accountTag: string;
+  accountLabel: string;
+  archiveOptOut: boolean;
+  totalWeeks: number;
+  oldestWeek: string | null;
+  newestWeek: string | null;
+  totalSizeBytes: number;
+}
+
+export interface ArchiveInfo {
+  archivedFrom: string | null;
+  archivedTo: string | null;
+  liveFrom: string;
+  liveTo: string;
+  archiveChunks: number;
+}
+
+export interface ArchiveData {
+  account_tag: string;
+  period: { start: string; end: string };
+  tunnels: string[];
+  ingress: TimeSeriesPoint[];
+  egress: TimeSeriesPoint[];
+}
+
 export interface BandwidthResult {
   ingress: DirectionStats;
   egress: DirectionStats;
@@ -92,6 +124,7 @@ export interface BandwidthResult {
   tunnels: string[];
   interval: string;
   chunks: number;
+  archiveInfo?: ArchiveInfo;
   queryParams: {
     start: string;
     end: string;
