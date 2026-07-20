@@ -189,18 +189,32 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Tunnel / Interconnect Multi-Select -->
         <div id="tunnel-filter-wrap">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnels / Interconnects</label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Tunnels / Interconnects <span class="text-[10px] text-cf-gray">(assign region tags)</span></label>
           <div class="relative">
             <button type="button" id="tunnel-select-btn" onclick="toggleTunnelDropdown()" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white text-left flex justify-between items-center">
               <span id="tunnel-select-label">All Tunnels</span>
               <svg class="w-3 h-3 text-cf-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <div id="tunnel-dropdown" class="hidden absolute z-50 mt-1 w-full bg-cf-dark border border-cf-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            <div id="tunnel-dropdown" class="hidden absolute z-50 mt-1 bg-cf-dark border border-cf-border rounded-lg shadow-lg max-h-60 overflow-y-auto" style="min-width:100%;width:max-content;max-width:420px">
               <label class="flex items-center gap-2 px-3 py-2 hover:bg-cf-border cursor-pointer text-sm text-white border-b border-cf-border">
                 <input type="checkbox" id="tunnel-select-all" checked onchange="toggleAllTunnels(this.checked)" class="accent-orange-500">
                 <span class="font-medium">Select All</span>
               </label>
               <div id="tunnel-options"></div>
+            </div>
+          </div>
+
+          <!-- Region Multi-Select (only shown when tags exist) -->
+          <div id="region-filter-wrap" class="hidden mt-2">
+            <label class="block text-xs font-medium text-cf-gray mb-1">Regions</label>
+            <div class="relative">
+              <button type="button" id="region-select-btn" onclick="toggleRegionDropdown()" class="w-full bg-cf-dark border border-cf-border rounded-lg px-3 py-1.5 text-sm text-white text-left flex justify-between items-center">
+                <span id="region-select-label">All Regions</span>
+                <svg class="w-3 h-3 text-cf-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div id="region-dropdown" class="hidden absolute z-50 mt-1 w-full bg-cf-dark border border-cf-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                <div id="region-options"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -339,6 +353,30 @@ export function renderDashboard(userEmail: string): string {
         <div class="panel p-4 fade-in dir-egress">
           <h3 class="text-xs font-semibold mb-3" style="color:var(--text-strong)">Egress Bit Rate by Percentile <span class="text-cf-gray font-normal" id="egress-pct-label">(avg over 5min window)</span></h3>
           <div style="height:280px"><canvas id="chart-egress-pct"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-Region P95 Breakdown -->
+    <div id="region-section" class="hidden">
+      <div class="panel p-4 fade-in">
+        <div class="flex items-center gap-2 mb-3">
+          <svg class="w-4 h-4 text-cf-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <h3 class="text-xs font-semibold" style="color:var(--text-strong)">Per-Region P95 Breakdown</h3>
+        </div>
+        <div id="region-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+        <div id="region-chart-wrap" class="mt-4 hidden">
+          <h4 class="text-xs font-semibold mb-2" style="color:var(--text-strong)">Regional Bit Rate (aggregate per region)</h4>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div id="region-ts-ingress-wrap" class="panel p-4">
+              <h5 class="text-[11px] font-semibold mb-2 text-cf-gray">Ingress</h5>
+              <div style="height:260px"><canvas id="chart-region-ingress"></canvas></div>
+            </div>
+            <div id="region-ts-egress-wrap" class="panel p-4">
+              <h5 class="text-[11px] font-semibold mb-2 text-cf-gray">Egress</h5>
+              <div style="height:260px"><canvas id="chart-region-egress"></canvas></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -750,16 +788,122 @@ function getTimeRange() {
   return { start: new Date(now.getTime() - offset).toISOString(), end: now.toISOString() };
 }
 
+// Region metadata tag options (kept in sync with src/types.ts REGIONS)
+var REGIONS = [
+  { code: 'GLOB', label: 'Global (Geo Container)' },
+  { code: 'NAMR', label: 'North America' },
+  { code: 'EURP', label: 'Europe' },
+  { code: 'ASIA', label: 'Asia' },
+  { code: 'ANZL', label: 'AUS/NZ' },
+  { code: 'CHNA', label: 'China' },
+  { code: 'INDA', label: 'India' },
+  { code: 'KREA', label: 'Korea' },
+  { code: 'LAMR', label: 'South America' },
+  { code: 'MEAF', label: 'Middle East & Africa' },
+  { code: 'TAWN', label: 'Taiwan' },
+];
+var REGION_LABELS = {};
+REGIONS.forEach(function(r) { REGION_LABELS[r.code] = r.label; });
+
 var allTunnelNames = [];
+var regionTags = {}; // tunnel_name -> region_code (for the active account)
+
+function escAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+
+function regionSelectHtml(tunnel) {
+  var current = regionTags[tunnel] || '';
+  var opts = '<option value="">— Region —</option>';
+  REGIONS.forEach(function(r) {
+    opts += '<option value="' + r.code + '"' + (r.code === current ? ' selected' : '') + '>' + r.label + '</option>';
+  });
+  return '<select class="tunnel-region-select bg-cf-dark border border-cf-border rounded px-1 py-0.5 text-[11px] text-white" ' +
+    'data-tunnel="' + escAttr(tunnel) + '" onchange="onRegionTagChange(this)" onclick="event.stopPropagation()">' + opts + '</select>';
+}
+
 function populateTunnelFilter(tunnelNames) {
   allTunnelNames = tunnelNames;
-  var container = document.getElementById('tunnel-options');
-  container.innerHTML = tunnelNames.map(function(t) {
-    return '<label class="flex items-center gap-2 px-3 py-1.5 hover:bg-cf-border cursor-pointer text-sm text-white">' +
-      '<input type="checkbox" checked class="tunnel-cb accent-orange-500" value="' + t + '" onchange="updateTunnelLabel()">' + t + '</label>';
-  }).join('');
+  renderTunnelOptions();
   document.getElementById('tunnel-select-all').checked = true;
   updateTunnelLabel();
+  // On-demand: reconcile region tags for the currently enumerated tunnels
+  syncRegionTags(tunnelNames);
+}
+
+function renderTunnelOptions() {
+  var container = document.getElementById('tunnel-options');
+  container.innerHTML = allTunnelNames.map(function(t) {
+    return '<div class="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-cf-border text-sm text-white">' +
+      '<label class="flex items-center gap-2 cursor-pointer min-w-0 flex-1">' +
+        '<input type="checkbox" checked class="tunnel-cb accent-orange-500" value="' + escAttr(t) + '" onchange="updateTunnelLabel()">' +
+        '<span class="truncate">' + t + '</span>' +
+      '</label>' +
+      regionSelectHtml(t) +
+    '</div>';
+  }).join('');
+}
+
+// On-demand sync fired whenever tunnels are enumerated: prunes tags for
+// removed tunnels/interconnects and hydrates selects with surviving tags.
+function syncRegionTags(tunnelNames) {
+  var acct = activeAccountTag || (document.getElementById('active-account-select') || {}).value;
+  if (!acct) return;
+  fetch('/api/region-tags/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account_tag: acct, tunnelNames: tunnelNames }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    regionTags = d.tags || {};
+    renderTunnelOptions();
+    updateTunnelLabel();
+    populateRegionFilter();
+  }).catch(function(){});
+}
+
+function onRegionTagChange(sel) {
+  var tunnel = sel.getAttribute('data-tunnel');
+  var code = sel.value;
+  var acct = activeAccountTag || (document.getElementById('active-account-select') || {}).value;
+  if (!acct) return;
+  if (code) { regionTags[tunnel] = code; } else { delete regionTags[tunnel]; }
+  populateRegionFilter();
+  fetch('/api/region-tags', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account_tag: acct, tunnel_name: tunnel, region_code: code }),
+  }).catch(function(){});
+}
+
+// Region multi-select filter — only shows regions that have >=1 tagged tunnel
+function populateRegionFilter() {
+  var present = {};
+  Object.keys(regionTags).forEach(function(t) { present[regionTags[t]] = true; });
+  var codes = REGIONS.filter(function(r) { return present[r.code]; });
+  var wrap = document.getElementById('region-filter-wrap');
+  var container = document.getElementById('region-options');
+  if (!wrap || !container) return;
+  if (codes.length === 0) { wrap.classList.add('hidden'); container.innerHTML = ''; return; }
+  wrap.classList.remove('hidden');
+  container.innerHTML = codes.map(function(r) {
+    return '<label class="flex items-center gap-2 px-3 py-1.5 hover:bg-cf-border cursor-pointer text-sm text-white">' +
+      '<input type="checkbox" class="region-cb accent-orange-500" value="' + r.code + '" onchange="updateRegionLabel()">' + r.label + '</label>';
+  }).join('');
+  updateRegionLabel();
+}
+function toggleRegionDropdown() {
+  document.getElementById('region-dropdown').classList.toggle('hidden');
+}
+function getSelectedRegions() {
+  var cbs = document.querySelectorAll('.region-cb');
+  var selected = [];
+  cbs.forEach(function(cb) { if (cb.checked) selected.push(cb.value); });
+  return selected;
+}
+function updateRegionLabel() {
+  var selected = getSelectedRegions();
+  var label = document.getElementById('region-select-label');
+  if (!label) return;
+  if (selected.length === 0) { label.textContent = 'All Regions'; }
+  else { label.textContent = selected.length + ' region' + (selected.length > 1 ? 's' : '') + ' selected'; }
 }
 function toggleTunnelDropdown() {
   document.getElementById('tunnel-dropdown').classList.toggle('hidden');
@@ -786,7 +930,12 @@ function updateTunnelLabel() {
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
   var wrap = document.getElementById('tunnel-filter-wrap');
-  if (wrap && !wrap.contains(e.target)) document.getElementById('tunnel-dropdown').classList.add('hidden');
+  var tunnelDd = document.getElementById('tunnel-dropdown');
+  var regionWrap = document.getElementById('region-filter-wrap');
+  var regionDd = document.getElementById('region-dropdown');
+  // Region dropdown lives inside tunnel-filter-wrap, so check it first
+  if (regionWrap && regionDd && !regionWrap.contains(e.target)) regionDd.classList.add('hidden');
+  if (wrap && tunnelDd && !wrap.contains(e.target)) tunnelDd.classList.add('hidden');
 });
 
 // ============================================================
@@ -818,6 +967,7 @@ async function runQuery() {
     var selectedTunnels = getSelectedTunnels();
     var acctTag = activeAccountTag || document.getElementById('active-account-select').value;
     if (!acctTag) { statusEl.textContent = 'Please select an account in Settings.'; statusEl.classList.remove('hidden'); btn.disabled = false; btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Run Query'; return; }
+    var selectedRegions = getSelectedRegions();
     var body = {
       start: range.start,
       end: range.end,
@@ -825,6 +975,7 @@ async function runQuery() {
       sourceCidrFilter: srcFilter || undefined,
       destCidrFilter: dstFilter || undefined,
       tunnelNames: selectedTunnels.length > 0 && selectedTunnels.length < allTunnelNames.length ? selectedTunnels : undefined,
+      regions: selectedRegions.length > 0 ? selectedRegions : undefined,
       accountTag: acctTag,
     };
 
@@ -1006,9 +1157,120 @@ function renderResults(data) {
     renderPercentileChart('chart-egress-pct', 'egressPct', data.egress.percentiles, data.egress.p95, '#3b82f6');
   }
 
+  // Per-region breakdown
+  renderRegionSection(data);
+
   // Data table
   document.getElementById('data-table-section').classList.remove('hidden');
   renderDataTable(data);
+}
+
+var regionLineColors = [
+  '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#eab308',
+  '#06b6d4', '#f43f5e', '#8b5cf6', '#10b981', '#d946ef',
+  '#0ea5e9', '#84cc16',
+];
+
+function renderRegionSection(data) {
+  var section = document.getElementById('region-section');
+  var cards = document.getElementById('region-cards');
+  var regions = data.perRegion || [];
+  // Hide the section entirely if nothing is tagged (the sole "Untagged" bucket
+  // would just duplicate the aggregate charts).
+  var hasTagged = regions.some(function(r) { return r.region !== 'UNTAGGED'; });
+  if (!regions.length || !hasTagged) { section.classList.add('hidden'); cards.innerHTML = ''; return; }
+
+  var showIngress = selectedDirection !== 'egress';
+  var showEgress = selectedDirection !== 'ingress';
+
+  cards.innerHTML = regions.map(function(r) {
+    var parts = '';
+    if (showIngress) {
+      parts += '<div class="flex items-center justify-between text-xs"><span class="text-cf-gray">P95 Ingress</span>' +
+        '<span style="color:#22c55e;font-weight:600">' + formatBps(r.ingress.p95) + '</span></div>';
+    }
+    if (showEgress) {
+      parts += '<div class="flex items-center justify-between text-xs"><span class="text-cf-gray">P95 Egress</span>' +
+        '<span style="color:#3b82f6;font-weight:600">' + formatBps(r.egress.p95) + '</span></div>';
+    }
+    if (showIngress) {
+      parts += '<div class="flex items-center justify-between text-[11px] text-cf-gray"><span>Peak / Avg In</span>' +
+        '<span>' + formatBps(r.ingress.peakBps) + ' / ' + formatBps(r.ingress.avgBps) + '</span></div>';
+    }
+    if (showEgress) {
+      parts += '<div class="flex items-center justify-between text-[11px] text-cf-gray"><span>Peak / Avg Eg</span>' +
+        '<span>' + formatBps(r.egress.peakBps) + ' / ' + formatBps(r.egress.avgBps) + '</span></div>';
+    }
+    return '<div class="panel p-3 fade-in" style="border-left:3px solid #F6821F">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<span class="text-xs font-semibold" style="color:var(--text-strong)">' + r.regionLabel + '</span>' +
+        '<span class="text-[10px] text-cf-gray">' + r.tunnels.length + ' tunnel' + (r.tunnels.length !== 1 ? 's' : '') + '</span>' +
+      '</div>' +
+      '<div class="space-y-1">' + parts + '</div>' +
+    '</div>';
+  }).join('');
+
+  section.classList.remove('hidden');
+
+  // Regional time-series charts (one line per region)
+  var chartWrap = document.getElementById('region-chart-wrap');
+  chartWrap.classList.remove('hidden');
+  document.getElementById('region-ts-ingress-wrap').style.display = showIngress ? '' : 'none';
+  document.getElementById('region-ts-egress-wrap').style.display = showEgress ? '' : 'none';
+  if (showIngress) renderRegionChart('chart-region-ingress', 'regionIngress', regions, 'ingress');
+  if (showEgress) renderRegionChart('chart-region-egress', 'regionEgress', regions, 'egress');
+}
+
+function renderRegionChart(canvasId, chartKey, regions, dir) {
+  var ctx = document.getElementById(canvasId).getContext('2d');
+  if (charts[chartKey]) charts[chartKey].destroy();
+
+  // Build a unified time axis across all regions
+  var timeSet = {};
+  regions.forEach(function(r) {
+    r[dir].series.forEach(function(p) { timeSet[p.time] = true; });
+  });
+  var times = Object.keys(timeSet).sort();
+  var timeIndex = {};
+  times.forEach(function(t, i) { timeIndex[t] = i; });
+  var labels = times.map(function(t) { return formatTime(t); });
+
+  var datasets = regions.map(function(r, idx) {
+    var color = regionLineColors[idx % regionLineColors.length];
+    var arr = new Array(times.length).fill(null);
+    r[dir].series.forEach(function(p) {
+      var i = timeIndex[p.time];
+      if (i !== undefined) arr[i] = (arr[i] || 0) + p.bitRate;
+    });
+    return {
+      label: r.regionLabel,
+      data: arr,
+      borderColor: color,
+      backgroundColor: 'transparent',
+      fill: false,
+      tension: 0.2,
+      pointRadius: 0,
+      borderWidth: 1.5,
+    };
+  });
+
+  charts[chartKey] = new Chart(ctx, {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: getChartTextColor(), font: { size: 9 }, usePointStyle: true, pointStyle: 'line', boxWidth: 16, padding: 8 } },
+        tooltip: { callbacks: { label: function(ctx) { if (ctx.parsed.y == null) return null; return ctx.dataset.label + ': ' + formatBps(ctx.parsed.y); } } }
+      },
+      scales: {
+        x: { ticks: { color: getChartTextColor(), font: { size: 9 }, maxRotation: 45, maxTicksLimit: 20 }, grid: { display: false } },
+        y: { ticks: { color: getChartTextColor(), font: { size: 10 }, callback: function(v) { return formatBps(v); } }, grid: { color: getChartGridColor() } }
+      }
+    }
+  });
 }
 
 var tunnelColors = [
@@ -1220,6 +1482,20 @@ function exportCsv() {
     rows.push(['CIDR % of Total P95 Egress', pctEg + '%']);
     rows.push(['CIDR Peak Ingress (bps)', lastQueryData.cidr.ingress.peakBps]);
     rows.push(['CIDR Peak Egress (bps)', lastQueryData.cidr.egress.peakBps]);
+  }
+
+  if (lastQueryData.perRegion && lastQueryData.perRegion.length) {
+    rows.push([]);
+    rows.push(['Region', 'Tunnels', 'P95 Ingress (bps)', 'P95 Egress (bps)', 'Peak Ingress (bps)', 'Peak Egress (bps)', 'Avg Ingress (bps)', 'Avg Egress (bps)']);
+    lastQueryData.perRegion.forEach(function(r) {
+      rows.push([
+        r.regionLabel,
+        '"' + r.tunnels.join('; ') + '"',
+        r.ingress.p95, r.egress.p95,
+        r.ingress.peakBps, r.egress.peakBps,
+        r.ingress.avgBps, r.egress.avgBps,
+      ]);
+    });
   }
 
   var csv = rows.map(function(r) { return r.join(','); }).join('\\n');

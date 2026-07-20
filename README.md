@@ -29,9 +29,17 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 ### Query & Filtering
 - **Direction filter** — ingress, egress, or both; charts and summary cards hide/show dynamically
 - **Multi-select tunnel filter** — select individual tunnels or "Select All"; tunnels auto-discovered on page load
+- **Region tags & filter** — tag each tunnel/interconnect with a region (see below) and scope queries to one or more regions
 - **CIDR filtering** — filter by one or more source and/or destination IP prefixes (one per line) for subset analysis
 - **Time range presets** — 1h, 6h, 24h, 2d, 7d, 14d, 30d, or custom date range (clamped to 16-week data retention)
 - **Collapsible filter panel** — collapse the query filters to focus on the data view
+
+### Per-Region P95 Analytics
+- **Region metadata tags** — assign a region to each tunnel/interconnect directly from the Tunnels/Interconnects dropdown. Tags are stored **per account** (shared across users of that account) in D1.
+- **On-demand reconciliation** — every time tunnels are enumerated (page load, account switch, token test), tags are synced: surviving tunnels keep their tags and tags for **removed** tunnels/interconnects are automatically deleted.
+- **Per-region breakdown** — a dedicated section renders per-region P95 summary cards (ingress/egress P95, peak, avg) plus a grouped time-series chart with one line per region.
+- **Region scoping** — the query's Regions filter restricts results to tunnels tagged with the selected region(s).
+- Available regions: **Global (Geo Container)**, **North America (NAMR)**, **Europe (EURP)**, **Asia (ASIA)**, **AUS/NZ (ANZL)**, **China (CHNA)**, **India (INDA)**, **Korea (KREA)**, **South America (LAMR)**, **Middle East & Africa (MEAF)**, **Taiwan (TAWN)**.
 
 ### Data & Export
 - **4-panel chart dashboard** — ingress/egress time-series (with per-tunnel lines and legend) + percentile distribution bar charts
@@ -219,6 +227,7 @@ src/
 └── p95.png       # Header graphic
 schema.sql                # D1 database schema
 migrate-multi-account.sql # Migration for multi-account + default account support
+migrate-region-tags.sql   # Migration for per-account tunnel region tags
 wrangler.toml             # Worker configuration
 ```
 

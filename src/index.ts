@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Env, BandwidthQuery, BandwidthResult } from './types';
+import type { Env, BandwidthQuery, BandwidthResult, RegionStats, TimeSeriesPoint } from './types';
+import { REGION_CODES, REGION_LABELS } from './types';
 import { accessAuthMiddleware } from './auth';
 import { queryBandwidth, aggregateByTime } from './graphql';
 import { calculateP95 } from './p95';
@@ -97,6 +98,81 @@ app.get('/api/settings/:id/token', async (c) => {
   ).bind(id, email).first();
   if (!row) return c.json({ error: 'Not found' }, 404);
   return c.json({ account_tag: row.account_tag, api_token: row.api_token });
+});
+
+// ─── Region Tags (per-account, shared) ───
+
+// Fetch region tag map for an account
+app.get('/api/region-tags', async (c) => {
+  const accountTag = (c.req.query('account_tag') || '').trim();
+  if (!accountTag) return c.json({ error: 'account_tag is required' }, 400);
+  const rows = await c.env.DB.prepare(
+    'SELECT tunnel_name, region_code FROM tunnel_region_tags WHERE account_tag = ?'
+  ).bind(accountTag).all();
+  const tags: Record<string, string> = {};
+  for (const r of (rows.results || []) as any[]) tags[r.tunnel_name] = r.region_code;
+  return c.json({ tags });
+});
+
+// On-demand reconciliation: prune tags for tunnels that no longer exist, return survivors
+app.post('/api/region-tags/sync', async (c) => {
+  const body = await c.req.json<{ account_tag?: string; tunnelNames?: string[] }>();
+  const accountTag = (body.account_tag || '').trim();
+  if (!accountTag) return c.json({ error: 'account_tag is required' }, 400);
+  const tunnelNames = Array.isArray(body.tunnelNames) ? body.tunnelNames : [];
+
+  const rows = await c.env.DB.prepare(
+    'SELECT tunnel_name, region_code FROM tunnel_region_tags WHERE account_tag = ?'
+  ).bind(accountTag).all();
+
+  const current = new Set(tunnelNames);
+  const stale: string[] = [];
+  const tags: Record<string, string> = {};
+  for (const r of (rows.results || []) as any[]) {
+    if (current.has(r.tunnel_name)) {
+      tags[r.tunnel_name] = r.region_code;
+    } else {
+      stale.push(r.tunnel_name);
+    }
+  }
+
+  // Delete tags for removed tunnels/interconnects
+  for (const name of stale) {
+    await c.env.DB.prepare(
+      'DELETE FROM tunnel_region_tags WHERE account_tag = ? AND tunnel_name = ?'
+    ).bind(accountTag, name).run();
+  }
+
+  return c.json({ tags, pruned: stale });
+});
+
+// Upsert (or clear) a single tunnel's region tag
+app.put('/api/region-tags', async (c) => {
+  const body = await c.req.json<{ account_tag?: string; tunnel_name?: string; region_code?: string }>();
+  const accountTag = (body.account_tag || '').trim();
+  const tunnelName = (body.tunnel_name || '').trim();
+  const regionCode = (body.region_code || '').trim();
+  if (!accountTag || !tunnelName) return c.json({ error: 'account_tag and tunnel_name are required' }, 400);
+
+  if (!regionCode) {
+    // Empty region clears the tag
+    await c.env.DB.prepare(
+      'DELETE FROM tunnel_region_tags WHERE account_tag = ? AND tunnel_name = ?'
+    ).bind(accountTag, tunnelName).run();
+    return c.json({ ok: true, cleared: true });
+  }
+
+  if (!REGION_CODES.has(regionCode)) {
+    return c.json({ error: `Unknown region code: ${regionCode}` }, 400);
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO tunnel_region_tags (account_tag, tunnel_name, region_code, updated_at)
+     VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(account_tag, tunnel_name)
+     DO UPDATE SET region_code = excluded.region_code, updated_at = datetime('now')`
+  ).bind(accountTag, tunnelName, regionCode).run();
+  return c.json({ ok: true });
 });
 
 // ─── Test Token ───
@@ -238,6 +314,7 @@ app.post('/api/query', async (c) => {
     sourceCidrFilter?: { include: string[]; exclude: string[] };
     destCidrFilter?: { include: string[]; exclude: string[] };
     tunnelNames?: string[];
+    regions?: string[];
     accountTag?: string;
   }>();
 
@@ -275,13 +352,33 @@ app.post('/api/query', async (c) => {
     return c.json({ error: raw.error }, 502);
   }
 
-  // Filter to selected tunnels, then aggregate per interval
+  // Load per-account region tag map (tunnel -> region code)
+  const tagRows = await c.env.DB.prepare(
+    'SELECT tunnel_name, region_code FROM tunnel_region_tags WHERE account_tag = ?'
+  ).bind(accountTag).all();
+  const regionTags: Record<string, string> = {};
+  for (const r of (tagRows.results || []) as any[]) regionTags[r.tunnel_name] = r.region_code;
+
+  // Build the effective tunnel set from selected tunnels ∩ selected regions
+  const regionScope = (body.regions && body.regions.length > 0) ? new Set(body.regions) : null;
+  const explicitTunnels = (body.tunnelNames && body.tunnelNames.length > 0) ? new Set(body.tunnelNames) : null;
+
+  function tunnelAllowed(tunnel?: string): boolean {
+    if (!tunnel) return false;
+    if (explicitTunnels && !explicitTunnels.has(tunnel)) return false;
+    if (regionScope) {
+      const region = regionTags[tunnel];
+      if (!region || !regionScope.has(region)) return false;
+    }
+    return true;
+  }
+
+  // Filter to selected tunnels/regions, then aggregate per interval
   let ingressFiltered = raw.ingress;
   let egressFiltered = raw.egress;
-  if (body.tunnelNames && body.tunnelNames.length > 0) {
-    const tunnelSet = new Set(body.tunnelNames);
-    ingressFiltered = raw.ingress.filter(p => p.tunnel && tunnelSet.has(p.tunnel));
-    egressFiltered = raw.egress.filter(p => p.tunnel && tunnelSet.has(p.tunnel));
+  if (explicitTunnels || regionScope) {
+    ingressFiltered = raw.ingress.filter(p => tunnelAllowed(p.tunnel));
+    egressFiltered = raw.egress.filter(p => tunnelAllowed(p.tunnel));
   }
 
   const ingressAgg = aggregateByTime(ingressFiltered);
@@ -302,6 +399,47 @@ app.post('/api/query', async (c) => {
   const ingressByTunnel = groupByTunnel(ingressFiltered);
   const egressByTunnel = groupByTunnel(egressFiltered);
 
+  // Build per-region breakdown by grouping tunnels by their region tag.
+  // Tunnels without a tag fall into an "Untagged" bucket (shown last).
+  const UNTAGGED = '__UNTAGGED__';
+  function buildDirectionStats(series: TimeSeriesPoint[]) {
+    const agg = aggregateByTime(series);
+    const p95 = calculateP95(agg);
+    return { series: agg, p95: p95.p95, percentiles: p95.percentiles, peakBps: p95.peak, avgBps: p95.avg };
+  }
+  const regionBuckets = new Map<string, { tunnels: Set<string>; ingress: TimeSeriesPoint[]; egress: TimeSeriesPoint[] }>();
+  function bucketFor(code: string) {
+    let b = regionBuckets.get(code);
+    if (!b) { b = { tunnels: new Set(), ingress: [], egress: [] }; regionBuckets.set(code, b); }
+    return b;
+  }
+  for (const [tunnel, pts] of Object.entries(ingressByTunnel)) {
+    const code = regionTags[tunnel] || UNTAGGED;
+    const b = bucketFor(code);
+    b.tunnels.add(tunnel);
+    b.ingress.push(...pts);
+  }
+  for (const [tunnel, pts] of Object.entries(egressByTunnel)) {
+    const code = regionTags[tunnel] || UNTAGGED;
+    const b = bucketFor(code);
+    b.tunnels.add(tunnel);
+    b.egress.push(...pts);
+  }
+  const perRegion: RegionStats[] = Array.from(regionBuckets.entries())
+    .map(([code, b]) => ({
+      region: code === UNTAGGED ? 'UNTAGGED' : code,
+      regionLabel: code === UNTAGGED ? 'Untagged' : (REGION_LABELS[code] || code),
+      tunnels: Array.from(b.tunnels).sort(),
+      ingress: buildDirectionStats(b.ingress),
+      egress: buildDirectionStats(b.egress),
+    }))
+    .sort((a, b) => {
+      // Untagged always last, otherwise by label
+      if (a.region === 'UNTAGGED') return 1;
+      if (b.region === 'UNTAGGED') return -1;
+      return a.regionLabel.localeCompare(b.regionLabel);
+    });
+
   const result: BandwidthResult = {
     ingress: {
       series: ingressAgg,
@@ -319,6 +457,7 @@ app.post('/api/query', async (c) => {
       peakBps: egressP95.peak,
       avgBps: egressP95.avg,
     },
+    perRegion,
     tunnels: raw.tunnels,
     interval: raw.interval,
     chunks: raw.chunks,
@@ -330,6 +469,7 @@ app.post('/api/query', async (c) => {
         ...(body.sourceCidr ? { sourceCidr: body.sourceCidr } : {}),
         ...(body.destCidr ? { destCidr: body.destCidr } : {}),
         ...(body.tunnelNames ? { tunnelNames: body.tunnelNames.join(', ') } : {}),
+        ...(body.regions && body.regions.length ? { regions: body.regions.join(', ') } : {}),
       },
     },
   };
