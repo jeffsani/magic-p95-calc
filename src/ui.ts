@@ -1063,7 +1063,7 @@ async function runQuery() {
 // ============================================================
 function parseCidrList(val) {
   if (!val) return '';
-  var items = val.split(/[\\n,]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+  var items = val.split(/[\\x0a,]+/).map(function(s) { return s.trim(); }).filter(Boolean);
   return items.join(',');
 }
 
@@ -1545,7 +1545,7 @@ function exportCsv() {
   if (!lastQueryData) return;
   function csvCell(v) {
     var s = String(v);
-    return /[",\\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    return /[",\\x0a]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
   var rows = [['Time', 'Direction', 'Tunnel', 'Region', 'Bit Rate (bps)', 'Bits', 'Packets']];
   buildRawRows(lastQueryData).forEach(function(r) {
@@ -1587,7 +1587,7 @@ function exportCsv() {
     });
   }
 
-  var csv = rows.map(function(r) { return r.join(','); }).join('\\n');
+  var csv = rows.map(function(r) { return r.join(','); }).join('\\x0a');
   var blob = new Blob([csv], { type: 'text/csv' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
