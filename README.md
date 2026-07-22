@@ -27,6 +27,9 @@ The Cloudflare dashboard does not natively display a P95 bandwidth figure. This 
 - **Active account bar** — always-visible indicator above the Query Filters showing the selected account name and tag; click it to jump straight to account settings
 
 ### Query & Filtering
+
+![Query Filters](src/query-filters.png)
+
 - **Direction filter** — ingress, egress, or both; charts and summary cards hide/show dynamically
 - **Multi-select tunnel filter** — select individual tunnels or "Select All"; tunnels auto-discovered on page load
 - **Region tags & filter** — tag each tunnel/interconnect with a region (see below) and scope queries to one or more regions
