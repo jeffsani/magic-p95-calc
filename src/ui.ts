@@ -309,7 +309,7 @@ export function renderDashboard(userEmail: string): string {
 
         <!-- Custom Date Pickers -->
         <div id="custom-dates" class="lg:col-span-2 hidden">
-          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range <span class="text-[10px] text-cf-gray">(max 16 weeks back)</span>${infoTip('Pick exact start and end date/times. Analytics data is retained for up to 16 weeks in the past.')}</label>
+          <label class="block text-xs font-medium text-cf-gray mb-1">Custom Range <span id="custom-range-hint" class="text-[10px] text-cf-gray">(max 16 weeks back)</span>${infoTip('Pick exact start and end date/times. When historical archiving is enabled with data present, the 16-week limit is removed.')}</label>
           <div class="flex gap-2">
             <input type="datetime-local" id="custom-start" class="flex-1 bg-cf-dark border border-cf-border rounded-lg px-2 py-1.5 text-xs text-white">
             <span class="text-cf-gray self-center text-xs">to</span>
@@ -818,12 +818,14 @@ async function testToken() {
 // ARCHIVE MANAGEMENT
 // ============================================================
 var archivingEnabled = false;
+var hasArchiveData = false;
 
 async function loadArchiveStatus() {
   try {
     var resp = await fetch('/api/archive/status');
     var data = await resp.json();
     archivingEnabled = data.settings.archiving_enabled;
+    hasArchiveData = (data.accounts || []).some(function(a) { return a.totalWeeks > 0; });
 
     // Update UI toggle
     var toggle = document.getElementById('archive-enabled-toggle');
@@ -833,10 +835,15 @@ async function loadArchiveStatus() {
     var retSel = document.getElementById('archive-retention-select');
     if (retSel) retSel.value = String(data.settings.retention_months || 12);
 
-    // Show/hide extended time range presets
+    // Show/hide extended time range presets (only when enabled AND data exists)
+    var showExtended = archivingEnabled && hasArchiveData;
     document.querySelectorAll('.archive-range-chip').forEach(function(el) {
-      el.classList.toggle('hidden', !archivingEnabled);
+      el.classList.toggle('hidden', !showExtended);
     });
+
+    // Update custom range hint
+    var hint = document.getElementById('custom-range-hint');
+    if (hint) hint.textContent = showExtended ? '(archives available)' : '(max 16 weeks back)';
 
     // Render per-account archive status
     renderArchiveStatusList(data.accounts || []);
@@ -896,10 +903,6 @@ async function toggleArchiving(enabled) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ archiving_enabled: enabled }),
-    });
-    // Show/hide extended range chips
-    document.querySelectorAll('.archive-range-chip').forEach(function(el) {
-      el.classList.toggle('hidden', !enabled);
     });
     loadArchiveStatus();
   } catch(e) {}
@@ -1012,8 +1015,8 @@ function setTimeRange(el) {
   var customPanel = document.getElementById('custom-dates');
   customPanel.classList.toggle('hidden', selectedRange !== 'custom');
   if (selectedRange === 'custom') {
-    // When archiving is enabled, allow dates much further back; otherwise 16 weeks
-    var maxBack = archivingEnabled ? (5 * 365 * 86400000) : MAX_RETENTION_MS;
+    // When archiving is enabled and data exists, allow dates much further back; otherwise 16 weeks
+    var maxBack = (archivingEnabled && hasArchiveData) ? (5 * 365 * 86400000) : MAX_RETENTION_MS;
     var minStr = new Date(Date.now() - maxBack).toISOString().slice(0, 16);
     document.getElementById('custom-start').setAttribute('min', minStr);
     document.getElementById('custom-end').setAttribute('min', minStr);
@@ -1022,13 +1025,13 @@ function setTimeRange(el) {
 
 function getTimeRange() {
   var now = new Date();
-  var minDate = archivingEnabled ? new Date(0) : new Date(now.getTime() - MAX_RETENTION_MS);
+  var minDate = (archivingEnabled && hasArchiveData) ? new Date(0) : new Date(now.getTime() - MAX_RETENTION_MS);
   if (selectedRange === 'custom') {
     var s = document.getElementById('custom-start').value;
     var e = document.getElementById('custom-end').value;
     if (!s || !e) return null;
     var startDate = new Date(s);
-    if (!archivingEnabled && startDate < minDate) startDate = minDate;
+    if (!(archivingEnabled && hasArchiveData) && startDate < minDate) startDate = minDate;
     return { start: startDate.toISOString(), end: new Date(e).toISOString() };
   }
   var ms = {
